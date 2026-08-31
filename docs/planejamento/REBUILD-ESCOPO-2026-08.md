@@ -7,10 +7,10 @@
 
 ## RB-01 — Cobrança da mensalidade da plataforma (Asaas)
 
-**Estado:** `VALIDAR` — código na `main` desde 2026-08-26 (PR #95, merge
-`97b52af`), mas **falta o smoke test com credencial real**: nenhuma cobrança foi
-emitida nem nenhum webhook foi recebido ainda. Só sai de `VALIDAR` quando um
-pagamento de verdade der baixa sozinho. · **Prioridade:** alta
+**Estado:** `CONCLUÍDO` — validado ponta a ponta em sandbox no dia 2026-08-31.
+Cobrança `pay_5i2z4pbwyan1gvvf` emitida pelo job, paga no Asaas, e baixada
+sozinha pelo webhook (`Cobrança 5c89a8db-… baixada por webhook do asaas`).
+· **Prioridade:** alta
 
 Hoje o Super-admin suspende na mão a loja que não pagou (`PlatformBillingService`
 gera a mensalidade, a baixa é manual). Decisão: **Asaas** como gateway da
@@ -82,16 +82,41 @@ da régua de cobrança e do painel de assinatura.
 A interface `IPlatformPaymentGateway` **permanece**: custou pouco, e a única
 coisa que ela deixou de ser é urgente.
 
-**Falta pra sair de VALIDAR (só você resolve):**
+### Validação em sandbox — 2026-08-31
 
-1. Abrir a conta Asaas e preencher `Billing:Asaas:ApiKey` e `WebhookToken`.
-   **Só a plataforma tem conta** — o lojista recebe uma cobrança e paga, sem
-   criar cadastro em lugar nenhum.
-2. Cadastrar a URL do webhook no painel do Asaas com o mesmo segredo.
-3. Preencher `BillingCnpj` e `BillingEmail` dos tenants existentes — sem isso a
-   loja cai na lista de pendências do job em vez de ser cobrada.
-4. Configurar `Billing:Asaas:BillingType` (o padrão `UNDEFINED` deixa o lojista
-   escolher; fixar `PIX` garante a tarifa fixa e evita a de cartão).
+Cinco obstáculos apareceram, e **nenhum deles era detectável pelos testes** —
+todos vivem na fronteira com o serviço real. Ficam registrados porque vão se
+repetir em produção:
+
+1. **User-Agent obrigatório.** O Asaas responde 400 `user_agent_not_informed`,
+   e o `HttpClient` do .NET não manda nenhum por padrão. Corrigido em PR #96.
+2. **`$` do início da chave interpolado pelo Docker Compose.** A chave do Asaas
+   começa com `$`, e o Compose trata isso como referência de variável — mesmo
+   dentro de aspas simples. **Aspas não protegem; o escape é `$$`.** O sintoma
+   era `Nenhum gateway de cobrança configurado` com a chave presente no `.env`.
+3. **O `.env` canônico é `/opt/tenant-erp/.env`, não `deploy/.env`.** O
+   `update.sh` copia o primeiro por cima do segundo (linha 63), então qualquer
+   edição feita na cópia some no deploy seguinte, em silêncio.
+4. **Piso de R$ 5,00 por cobrança.** Passou a ser checado localmente.
+5. **Cliente duplicado a cada retentativa.** Bug de arquitetura: criar o cliente
+   dentro da emissão descartava o id quando a cobrança falhava. Corrigido em
+   PR #98.
+
+**Configuração de produção (checklist):**
+
+1. `Billing:Asaas:ApiKey` e `WebhookToken` no `/opt/tenant-erp/.env`, com a
+   chave escapada como `$$aact_...`. **Só a plataforma tem conta** — o lojista
+   recebe uma cobrança e paga, sem criar cadastro em lugar nenhum.
+2. Webhook no painel do Asaas com o mesmo segredo, envio **sequencial**, e só os
+   seis eventos que o `InterpretarWebhook` trata.
+3. `BillingCnpj` e `BillingEmail` de cada tenant — sem isso a loja cai na lista
+   de pendências do job em vez de ser cobrada.
+4. `BillingType=PIX`. O padrão `UNDEFINED` deixa o lojista escolher cartão, e aí
+   a assinatura custa 2,99% + 1,99% em vez da tarifa fixa de R$ 1,99.
+
+**Atenção:** falha repetida de entrega faz o Asaas **penalizar e pausar a fila**
+do webhook (~15 tentativas). Depois de corrigir a causa, é preciso religar a
+"Fila de sincronização" no painel — ele não retoma sozinho.
 
 ## RB-02 — Recebimento das vendas do lojista (multi-PSP)
 
