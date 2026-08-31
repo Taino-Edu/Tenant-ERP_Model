@@ -2623,3 +2623,35 @@ export const restaurantApi = {
   updateProductionStatus: (comandaId: string, itemId: string, status: RestaurantProductionStatus) =>
     api.put<RestaurantProductionItemDto>(`/api/restaurante/comandas/${comandaId}/itens/${itemId}/status-producao`, { status }),
 }
+
+// ── Assinatura da própria loja (RB-01) ───────────────────────────────────────
+// Espelho reduzido do billing da plataforma: aqui a loja só enxerga a si mesma.
+// O tenant nunca vai no corpo nem na rota — o backend resolve pelo token.
+
+export interface FaturaDto {
+  id: string
+  tipo: string
+  valor: number
+  competencia: string
+  vencimento: string
+  pagoEm?: string | null
+  vencida: boolean
+  linkDePagamento?: string | null
+}
+
+export interface AssinaturaDto {
+  plano: string
+  mensalidade: number
+  situacao: string
+  statusPagamento: string
+  cnpj?: string | null
+  emailDeFaturamento?: string | null
+  dadosCompletos: boolean
+  faturas: FaturaDto[]
+}
+
+export const assinaturaApi = {
+  obter: () => api.get<AssinaturaDto>('/api/assinatura'),
+  salvarFaturamento: (body: { documento: string; email: string }) =>
+    api.put<AssinaturaDto>('/api/assinatura/faturamento', body),
+}
