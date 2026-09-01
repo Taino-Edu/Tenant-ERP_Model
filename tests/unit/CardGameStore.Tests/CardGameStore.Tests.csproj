@@ -18,6 +18,12 @@
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.30" />
+    <!-- Referência explícita, na MESMA versão do EF Core do projeto principal.
+         Sem ela, o Relational que chega aqui é o 8.0.11 exigido pelo provider
+         Npgsql — que é o topo da linha dele para o EF 8, enquanto o EF Core já
+         vai em 8.0.30. O assembly principal compila contra 8.0.30, o de testes
+         referencia 8.0.11, e o build para em CS1705 sem executar teste algum. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.30" />
     <!-- Cobertura de código: dotnet test -collect:"XPlat Code Coverage" -->
     <PackageReference Include="coverlet.collector" Version="6.0.4">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
