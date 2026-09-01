@@ -47,7 +47,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.30" />
 
     <!-- Swagger -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
 
     <!-- BCrypt -->
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
