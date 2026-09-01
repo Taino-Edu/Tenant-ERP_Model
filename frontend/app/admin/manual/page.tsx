@@ -1,11 +1,12 @@
 'use client'
 import { useEffect } from 'react'
 import Link from 'next/link'
+import { Printer, Rocket } from 'lucide-react'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { MANUAL_SECOES as SECOES } from '@/lib/manualContent'
 
-const VERSION = 'v2.9.0'
-const DATA = '10/08/2026'
+const VERSION = 'v3.0.0'
+const DATA = '28/08/2026'
 
 export default function ManualPdfPage() {
   const { site } = useSiteConfig()
@@ -15,9 +16,7 @@ export default function ManualPdfPage() {
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
+      <style dangerouslySetInnerHTML={{ __html: `
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
@@ -28,7 +27,7 @@ export default function ManualPdfPage() {
           line-height: 1.55;
         }
 
-        .page { max-width: 820px; margin: 0 auto; padding: 32px 40px; }
+        .page { max-width: 820px; min-height: 100vh; margin: 0 auto; padding: 32px 40px; background: #fff; }
 
         /* Botão — some no print */
         .print-btn {
@@ -102,7 +101,7 @@ export default function ManualPdfPage() {
         .indice h2 { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
         .indice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 32px; }
         .indice-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #374151; padding: 3px 0; }
-        .indice-num { font-weight: 700; color: #9ca3af; font-size: 11px; width: 20px; }
+        .indice-num { font-weight: 700; color: #9ca3af; font-size: 11px; width: 24px; flex-shrink: 0; white-space: nowrap; }
 
         /* Seção */
         .secao {
@@ -166,6 +165,17 @@ export default function ManualPdfPage() {
         /* Rodapé */
         .rodape { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 11px; color: #9ca3af; }
 
+        @media (max-width: 639px) {
+          .page { padding: 24px 16px 96px; }
+          .btn-row { flex-direction: column; gap: 8px; }
+          .print-btn, .quick-btn { width: 100%; justify-content: center; padding: 12px 16px; }
+          .capa { margin-bottom: 24px; }
+          .capa h1 { font-size: 22px; line-height: 1.2; }
+          .indice-grid { grid-template-columns: 1fr; gap: 2px; }
+          .indice-item { min-height: 32px; padding: 5px 0; }
+          .rodape { flex-direction: column; gap: 4px; padding-bottom: 12px; }
+        }
+
         @media print {
           .print-btn { display: none !important; }
           body { font-size: 12px; }
@@ -175,16 +185,18 @@ export default function ManualPdfPage() {
           .capa, .indice { break-inside: avoid; page-break-inside: avoid; }
           @page { margin: 1.5cm; size: A4; }
         }
-      `}</style>
+      ` }} />
 
       <div className="page">
         {/* Botões */}
         <div className="btn-row">
           <button className="print-btn" onClick={() => window.print()}>
-            🖨️ Imprimir / Salvar como PDF
+            <Printer width={16} height={16} aria-hidden />
+            Imprimir / Salvar como PDF
           </button>
           <Link href="/admin/primeiros-passos" className="quick-btn">
-            🚀 Prefere um resumo rápido? Primeiros Passos
+            <Rocket width={16} height={16} aria-hidden />
+            Prefere um resumo rápido? Primeiros Passos
           </Link>
         </div>
 

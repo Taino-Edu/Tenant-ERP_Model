@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { NAV_SECTIONS, isItemVisible, tabBarItems, type NavVisibilityCtx } from '../lib/adminNav'
+import {
+  NAV_SECTIONS,
+  currentNavItem,
+  isItemVisible,
+  tabBarItems,
+  visibleSections,
+  type NavVisibilityCtx,
+} from '../lib/adminNav'
 import { ADMIN_KEYBOARD_SHORTCUTS } from '../lib/adminKeyboardShortcuts'
 
 // As permissões de operador vivem em CardGameStore/Models/PostgreSQL/Perfil.cs
@@ -46,10 +53,11 @@ test.describe('navegação do admin', () => {
     expect(isItemVisible(comanda, contexto({ hasPerm: perm => perm === 'dashboard' }))).toBe(false)
   })
 
-  test('um item some quando o módulo dele está desligado', () => {
-    const comanda = TODOS_OS_ITENS.find(item => item.href === '/admin/comanda')!
+  test('um item de módulo some quando o módulo dele está desligado', () => {
+    const restaurante = TODOS_OS_ITENS.find(item => item.href === '/admin/comanda/restaurante')!
 
-    expect(isItemVisible(comanda, contexto({ enabledModules: [] }))).toBe(false)
+    expect(isItemVisible(restaurante, contexto({ enabledModules: [] }))).toBe(false)
+    expect(isItemVisible(restaurante, contexto({ enabledModules: ['restaurante'] }))).toBe(true)
   })
 
   test('a barra do celular respeita permissão e módulo', () => {
@@ -58,6 +66,24 @@ test.describe('navegação do admin', () => {
 
     const soCaixa = tabBarItems(contexto({ hasPerm: perm => perm === 'pdv', enabledModules: [] }))
     expect(soCaixa.map(item => item.href)).toEqual(['/admin/venda-avulsa'])
+  })
+
+  test('o primeiro nível tem no máximo oito áreas e esconde áreas vazias', () => {
+    expect(NAV_SECTIONS).toHaveLength(8)
+
+    const operadorCaixa = visibleSections(contexto({
+      isAdmin: false,
+      enabledModules: [],
+      hasPerm: perm => perm === 'pdv',
+    }))
+
+    expect(operadorCaixa.map(section => section.label)).toEqual(['Vendas', 'Configurações', 'Ajuda'])
+    expect(operadorCaixa.flatMap(section => section.items).map(item => item.href)).not.toContain('/admin/perfis')
+  })
+
+  test('uma rota filha seleciona apenas o item mais específico', () => {
+    expect(currentNavItem('/admin/comanda/restaurante')?.href).toBe('/admin/comanda/restaurante')
+    expect(currentNavItem('/admin/comanda/123')?.href).toBe('/admin/comanda')
   })
 })
 

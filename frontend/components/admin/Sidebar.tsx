@@ -1,19 +1,21 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { clearAuth, getUserName, getRole } from '@/lib/auth'
-import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
+import { authApi, notificationsApi, fiscalApi, getErrorMessage, userApi } from '@/lib/api'
 import {
-  LogOut, User, Loader2, X, Menu, Store,
-  ChevronsLeft, ChevronsRight,
+  Camera, LogOut, User, Loader2, X, Menu, Store,
+  ChevronsLeft, ChevronsRight, ChevronRight,
 } from 'lucide-react'
 import clsx from 'clsx'
+import toast from 'react-hot-toast'
 import ThemeToggle from '@/components/ThemeToggle'
 import MobileTabBar from '@/components/admin/MobileTabBar'
-import { SIDEBAR_SHORTCUT_KEYS } from '@/lib/adminKeyboardShortcuts'
-import { NAV_SECTIONS, isItemVisible, currentNavTitle, type NavItem } from '@/lib/adminNav'
+import OctusSymbol from '@/components/OctusSymbol'
+import { currentNavItem, currentNavTitle, visibleSections } from '@/lib/adminNav'
 import { useScrollLock } from '@/hooks/useMediaQuery'
 import { useAdminPermissions } from '@/hooks/useAdminPermissions'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
@@ -27,80 +29,55 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+function TenantOrOctusIcon({ src, alt, className }: { src?: string | null; alt: string; className: string }) {
+  if (!src) return <OctusSymbol className={className} />
+  return <Image src={src} alt={alt} width={40} height={40} unoptimized className={clsx(className, 'object-contain')} />
+}
+
 function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules, collapsed = false }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[]; collapsed?: boolean }) {
   // O guard de hidratação (cookie não existe no SSR) mora no hook, junto com a
   // escuta da renovação de sessão — ver hooks/useAdminPermissions.ts.
   const { isAdmin, can } = useAdminPermissions()
-  const checkPerm = (perm: string | null) => perm === null || can(perm)
+  const sections = visibleSections({ isAdmin, enabledModules, hasPerm: can })
+  const current = currentNavItem(pathname)
 
   return (
-    <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
-      {NAV_SECTIONS.map(({ label, items, adminOnly }) => {
-        if (adminOnly && !isAdmin) return null
-        const visibleItems = items.filter(item =>
-          isItemVisible(item, { isAdmin, enabledModules, hasPerm: checkPerm }),
+    <nav aria-label="Áreas do painel" className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
+      {sections.map(section => {
+        const { label, icon: SectionIcon, items } = section
+        const sectionActive = items.some(item => item.href === current?.href)
+        const destination = items[0].href
+        const hasDot = items.some(item =>
+          (item.href === '/admin/mensageria' && unreadCount > 0)
+          || (item.href === '/admin/fiscal' && fiscalAlerta),
         )
-        if (visibleItems.length === 0) return null
         return (
-          <div key={label} className="mb-2">
-            {/* Recolhida: sem cabeçalho de seção (texto pequeno demais pra caber) —
-                só uma linha divisória sutil pra ainda separar os grupos visualmente. */}
-            {collapsed ? (
-              <div className="h-px bg-surface-700 mx-2 mt-3 mb-2" />
-            ) : (
-              <p className="text-[10px] uppercase text-gray-500 font-bold mt-3 mb-1 px-4 tracking-wider">
-                {label}
-              </p>
-            )}
-            {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: NavItem) => {
-              const active   = pathname.startsWith(href)
-              const shortcut = SIDEBAR_SHORTCUT_KEYS[href]
-              const hasDot   = (href === '/admin/mensageria' && unreadCount > 0)
-                             || (href === '/admin/fiscal' && fiscalAlerta)
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  onClick={onClose}
-                  // A MobileTabBar já marcava a tela atual; a sidebar só trocava
-                  // a classe CSS, então quem navega por leitor de tela percorria
-                  // os 27 links sem nenhum deles dizer "você está aqui".
-                  aria-current={active ? 'page' : undefined}
-                  title={collapsed ? itemLabel : undefined}
-                  className={clsx(
-                    'flex items-center w-full py-3 rounded-xl font-medium text-sm transition-all duration-150 group',
-                    collapsed ? 'justify-center px-0' : 'gap-4 px-4',
-                    active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
+          <div key={label} className="mb-0.5">
+            <Link
+              href={destination}
+              onClick={onClose}
+              aria-current={sectionActive ? 'page' : undefined}
+              title={collapsed ? label : undefined}
+              className={clsx(
+                'group flex w-full items-center rounded-xl py-3 text-sm font-medium transition-all duration-150',
+                collapsed ? 'justify-center px-0' : 'gap-4 px-4',
+                sectionActive ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white',
+              )}
+            >
+              <div className="relative shrink-0">
+                <SectionIcon className={clsx('h-5 w-5', sectionActive ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
+                {hasDot && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
+              </div>
+              {!collapsed && (
+                <>
+                  <span className={clsx('flex-1 nav-item-label', sectionActive && 'font-semibold')}>{label}</span>
+                  {items.length > 1 && (
+                    <ChevronRight className={clsx('h-4 w-4', sectionActive && 'text-brand-400')} />
                   )}
-                >
-                  <div className="relative shrink-0">
-                    <Icon className={clsx('w-5 h-5', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
-                    {hasDot && (
-                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                    )}
-                  </div>
-                  {!collapsed && (
-                    <>
-                      <span className={clsx('flex-1 nav-item-label', active && 'font-semibold')}>{itemLabel}</span>
-                      {badge && (
-                        <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
-                          {badge}
-                        </span>
-                      )}
-                      {/* gray-400 e não gray-600: a 9px o atalho é o menor texto
-                          da tela, e no gray-600 saía a 2,8:1 no tema claro e
-                          2,3:1 no escuro. Não é enfeite — é a única pista de que
-                          o atalho existe. */}
-                      {shortcut && !active && (
-                        <kbd className="hidden md:inline-block text-[9px] text-gray-400 bg-surface-800 border border-surface-600 rounded px-1.5 py-0.5 font-mono font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">
-                          {shortcut}
-                        </kbd>
-                      )}
-                    </>
-                  )}
-                </Link>
-              )
-            })}
+                </>
+              )}
+            </Link>
+
           </div>
         )
       })}
@@ -112,11 +89,13 @@ export default function Sidebar() {
   const pathname      = usePathname()
   const router        = useRouter()
   const { site }       = useSiteConfig()
-  const logoSrc         = site.adminIconUrl || site.logoUrl || '/logo-placeholder.svg'
+  const logoSrc         = site.adminIconUrl || site.logoUrl
   const [loggingOut,   setLoggingOut]   = useState(false)
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
   const [fiscalAlerta, setFiscalAlerta] = useState(false)
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
+  const [uploadingProfileImage, setUploadingProfileImage] = useState(false)
   // Cookies de metadados só existem no navegador. O primeiro render precisa
   // repetir o SSR; nome/role reais entram depois da hidratação — mesmo guard
   // que o hook já aplica às permissões.
@@ -128,6 +107,7 @@ export default function Sidebar() {
   const [collapsed,    setCollapsed]    = useState(false)
   const drawerRef     = useRef<HTMLElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
+  const profileImageInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     try {
@@ -230,6 +210,16 @@ export default function Sidebar() {
     return () => { mounted = false; clearInterval(id) }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    userApi.me()
+      .then(({ data }) => {
+        if (active) setProfileImageUrl(data.profileImageUrl)
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
   // Dot do Fiscal usa um sinal próprio (validade do certificado), não o unreadCount
   // genérico de notificações — evita acender junto com o dot de Mensageria.
   useEffect(() => {
@@ -255,9 +245,80 @@ export default function Sidebar() {
     router.push('/login')
   }
 
+  async function handleProfileImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Use uma imagem JPEG, PNG ou WebP.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A foto deve ter no máximo 5 MB.')
+      return
+    }
+
+    setUploadingProfileImage(true)
+    try {
+      const { data } = await authApi.uploadProfileImage(file)
+      setProfileImageUrl(data.url)
+      toast.success('Sua foto de perfil foi atualizada.')
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível atualizar sua foto.'))
+    } finally {
+      setUploadingProfileImage(false)
+    }
+  }
+
   const role = mounted ? getRole() : ''
   const userName = mounted ? getUserName() : 'Admin'
   const roleLabel = role === 'Admin' ? 'Admin' : role === 'Operator' ? 'Operador' : role
+
+  function renderProfileImage(sizeClass: string) {
+    return (
+      <button
+        type="button"
+        onClick={() => profileImageInputRef.current?.click()}
+        disabled={uploadingProfileImage}
+        aria-label="Alterar minha foto de perfil"
+        title="Alterar minha foto"
+        className={clsx(
+          'group/avatar relative shrink-0 overflow-hidden rounded-full border border-brand-500/30 bg-brand-500/20',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-900',
+          'disabled:cursor-wait disabled:opacity-70',
+          sizeClass,
+        )}
+      >
+        {uploadingProfileImage ? (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-brand-400" />
+          </span>
+        ) : profileImageUrl ? (
+          <Image
+            src={profileImageUrl}
+            alt=""
+            fill
+            unoptimized
+            sizes="40px"
+            className="object-cover"
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <User className="h-5 w-5 text-brand-400" />
+          </span>
+        )}
+        {!uploadingProfileImage && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100">
+            <Camera className="h-4 w-4 text-white" />
+          </span>
+        )}
+        <span className="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-full border border-surface-900 bg-brand-500 text-white group-hover/avatar:hidden group-focus-visible/avatar:hidden">
+          <Camera className="h-2.5 w-2.5" />
+        </span>
+      </button>
+    )
+  }
 
   function renderFooter(isCollapsed: boolean) {
     if (isCollapsed) {
@@ -265,12 +326,7 @@ export default function Sidebar() {
       // navegação continua clara sem o texto.
       return (
         <div className="px-3 py-4 border-t border-surface-500 flex flex-col items-center gap-2">
-          <div
-            title={`${userName} (${roleLabel})`}
-            className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0"
-          >
-            <User className="w-5 h-5 text-brand-400" />
-          </div>
+          {renderProfileImage('h-10 w-10')}
           <a
             href="/" target="_blank" rel="noopener noreferrer" title="Ver Loja"
             className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-500 hover:bg-surface-700 hover:text-brand-400 transition-colors"
@@ -291,9 +347,7 @@ export default function Sidebar() {
     return (
       <div className="px-3 py-4 border-t border-surface-500">
         <div className="flex items-center gap-3 bg-surface-700 p-3 rounded-xl border border-surface-500 mb-2">
-          <div className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0">
-            <User className="w-5 h-5 text-brand-400" />
-          </div>
+          {renderProfileImage('h-10 w-10')}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-white truncate">{userName}</p>
             <span className="badge-admin text-[10px]">{roleLabel}</span>
@@ -329,18 +383,25 @@ export default function Sidebar() {
 
   return (
     <>
+      <input
+        ref={profileImageInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleProfileImageChange}
+        className="hidden"
+      />
       {/* ── Mobile: barra superior ──────────────────────────────────────────
           Mostra o TÍTULO DA TELA ATUAL, não só a marca. Sem sidebar visível, o
           celular perde a única indicação de "onde estou" — e a marca da loja,
           que o usuário já conhece, não responde a essa pergunta. A logo fica
           reduzida a um selo de canto. */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-surface-800 border-b border-surface-500 px-4 h-topbar">
-        <img src={logoSrc} alt={site.siteName} className="h-8 w-8 object-contain shrink-0" />
+        <TenantOrOctusIcon src={logoSrc} alt={site.siteName} className="h-8 w-8" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white truncate leading-tight">
             {currentNavTitle(pathname) ?? site.siteName}
           </p>
-          <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase leading-tight">Admin</p>
+          <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase leading-tight">{roleLabel || 'Painel da loja'}</p>
         </div>
         <button
           ref={menuButtonRef}
@@ -376,10 +437,10 @@ export default function Sidebar() {
       >
         <div className="flex items-center justify-between gap-2 px-5 py-5 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <img src={logoSrc} alt={site.siteName} className="h-10 w-10 object-contain shrink-0" />
+            <TenantOrOctusIcon src={logoSrc} alt={site.siteName} className="h-10 w-10" />
             <div className="min-w-0">
               <p className="text-white text-base leading-tight truncate">{site.siteName}</p>
-              <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
+              <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">{roleLabel || 'Painel da loja'}</p>
             </div>
           </div>
           <button
@@ -405,11 +466,11 @@ export default function Sidebar() {
         collapsed ? 'w-[76px]' : 'w-[260px]',
       )}>
         <div className={clsx('py-7 shrink-0 flex items-center gap-3', collapsed ? 'px-0 justify-center' : 'px-6')}>
-          <img src={logoSrc} alt={site.siteName} className="h-10 w-10 object-contain shrink-0" />
+          <TenantOrOctusIcon src={logoSrc} alt={site.siteName} className="h-10 w-10" />
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-white text-base leading-tight truncate">{site.siteName}</p>
-              <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
+              <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">{roleLabel || 'Painel da loja'}</p>
             </div>
           )}
         </div>

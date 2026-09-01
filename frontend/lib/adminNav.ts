@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Package, QrCode, ShoppingBag, Users, Megaphone,
   CreditCard, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  Rocket, PartyPopper, Sparkles, UtensilsCrossed,
+  Rocket, PartyPopper, Sparkles, UtensilsCrossed, CircleHelp, ReceiptText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -12,104 +12,107 @@ export interface NavItem {
   icon: LucideIcon
   /** Permissão exigida (`null` = visível para qualquer perfil autenticado). */
   perm: string | null
+  /** Algumas configurações pertencem exclusivamente ao dono da loja. */
+  adminOnly?: boolean
   /** Módulo do tenant que precisa estar habilitado em SiteConfig.enabledModules. */
   module?: string
   badge?: string
-  /** Rótulo curto para a barra inferior do celular — "Frente de Caixa" não
-   * cabe num alvo de 64px de largura, "Caixa" cabe. */
+  /** Rótulo curto para a barra inferior do celular. */
   short?: string
 }
 
 export interface NavSection {
+  /** Nome orientado à tarefa que aparece no primeiro nível do menu. */
   label: string
-  adminOnly?: boolean
+  icon: LucideIcon
   items: NavItem[]
 }
 
-/** Definição única da navegação do admin — consumida pela Sidebar (desktop e
- * drawer) e pela MobileTabBar. Antes vivia dentro de Sidebar.tsx; foi extraída
- * quando a barra inferior do celular passou a precisar das MESMAS regras de
- * permissão e de módulo. Duplicar a lista significaria, mais cedo ou mais
- * tarde, um item aparecendo na barra do celular para quem não pode acessá-lo. */
+/**
+ * Navegação orientada ao trabalho do cliente.
+ *
+ * O primeiro nível tem poucas áreas estáveis. As funções continuam com as
+ * mesmas rotas e permissões, mas aparecem como subpáginas apenas dentro da
+ * área ativa. Isso preserva links, atalhos e controle de acesso sem obrigar o
+ * usuário a memorizar a arquitetura interna do produto.
+ */
 export const NAV_SECTIONS: NavSection[] = [
   {
-    label: 'Operacional',
+    label: 'Início',
+    icon: LayoutDashboard,
     items: [
-      // ComandaController exige a permissão `comandas`. Enquanto o menu pedia
-      // `dashboard`, quem tinha só comandas não achava a tela, e quem tinha só
-      // dashboard entrava pra tomar 403 na primeira chamada.
-      // Sem `module`: comanda é plano base. Ver o comentário em ComandaController.
-      { href: '/admin/comanda',      label: 'Comanda',          icon: Users,           badge: 'LIVE', perm: 'comandas', short: 'Comanda' },
-      { href: '/admin/dashboard',    label: 'Painel Geral',     icon: LayoutDashboard,                perm: 'dashboard', short: 'Painel' },
-      { href: '/admin/venda-avulsa', label: 'Frente de Caixa',  icon: ShoppingBag,                    perm: 'pdv', short: 'Caixa' },
-      { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes', module: 'restaurante', short: 'QR Code' },
+      { href: '/admin/dashboard', label: 'Visão geral', icon: LayoutDashboard, perm: 'dashboard', short: 'Início' },
     ],
   },
   {
-    // Fica logo após Operacional de propósito: Perfis de Acesso precisa
-    // existir ANTES de cadastrar um Operador (em Vendas & Clientes) — quem
-    // configura a loja passa por aqui primeiro.
-    label: 'Administração',
-    adminOnly: true,
+    label: 'Vendas',
+    icon: ShoppingBag,
     items: [
-      { href: '/admin/perfis',      label: 'Perfis de Acesso',  icon: UserCog,  perm: null },
-      { href: '/admin/integracoes', label: 'Integrações',       icon: Plug,     perm: null },
-      { href: '/admin/site',        label: 'Personalizar Site', icon: Palette,  perm: null },
-      { href: '/admin/email',       label: 'E-mail',            icon: Mail,     perm: null },
-      { href: '/admin/ia-config',   label: 'Assistente de IA',  icon: Sparkles, perm: null, module: 'ia' },
-    ],
-  },
-  {
-    label: 'Módulos',
-    items: [
-      { href: '/admin/fiscal',      label: 'Fiscal',            icon: Receipt,          perm: 'fiscal',     module: 'fiscal' },
-      { href: '/admin/eventos',     label: 'Gestão de Eventos', icon: PartyPopper,      perm: 'eventos',    module: 'eventos' },
+      { href: '/admin/venda-avulsa', label: 'Frente de Caixa', icon: ShoppingBag, perm: 'pdv', short: 'Caixa' },
+      { href: '/admin/comanda', label: 'Comandas', icon: Users, badge: 'LIVE', perm: 'comandas', short: 'Comanda' },
       { href: '/admin/comanda/restaurante', label: 'Restaurante', icon: UtensilsCrossed, perm: 'restaurante', module: 'restaurante' },
-      { href: '/admin/suporte',     label: 'Suporte',           icon: LifeBuoy,         perm: 'suporte' },
+      { href: '/admin/reservas', label: 'Pré-vendas', icon: ClipboardList, perm: 'estoque', module: 'estoque' },
     ],
   },
   {
-    label: 'Vendas & Clientes',
+    label: 'Produtos',
+    icon: Package,
     items: [
-      { href: '/admin/usuarios',  label: 'Clientes',   icon: Users,         perm: 'usuarios' },
-      { href: '/admin/crediario', label: 'Crediário',  icon: CreditCard,    perm: 'crediario' },
-      { href: '/admin/reservas',  label: 'Pré-vendas', icon: ClipboardList, perm: 'estoque', module: 'estoque' },
+      { href: '/admin/estoque', label: 'Produtos e estoque', icon: Package, perm: 'estoque', short: 'Estoque' },
     ],
   },
   {
-    label: 'Estoque & Catálogo',
+    label: 'Clientes e equipe',
+    icon: Users,
     items: [
-      { href: '/admin/estoque', label: 'Estoque', icon: Package, perm: 'estoque', short: 'Estoque' },
+      { href: '/admin/usuarios', label: 'Clientes e operadores', icon: Users, perm: 'usuarios' },
+      { href: '/admin/crediario', label: 'Crediário', icon: CreditCard, perm: 'crediario' },
+      { href: '/admin/perfis', label: 'Perfis de acesso', icon: UserCog, perm: null, adminOnly: true },
     ],
   },
   {
     label: 'Financeiro',
+    icon: TrendingUp,
     items: [
-      { href: '/admin/financeiro',     label: 'Financeiro',          icon: TrendingUp, perm: 'financeiro' },
-      { href: '/admin/contas-receber', label: 'Contas a Pagar/Rec',  icon: Wallet,     perm: 'financeiro' },
-      { href: '/admin/relatorios',     label: 'Relatórios',          icon: BarChart2,  perm: 'relatorios' },
+      { href: '/admin/financeiro', label: 'Visão financeira', icon: TrendingUp, perm: 'financeiro' },
+      { href: '/admin/contas-receber', label: 'Contas a pagar e receber', icon: Wallet, perm: 'financeiro' },
+      { href: '/admin/relatorios', label: 'Relatórios', icon: BarChart2, perm: 'relatorios' },
+      { href: '/admin/fiscal', label: 'Fiscal', icon: Receipt, perm: 'fiscal', module: 'fiscal' },
     ],
   },
   {
     label: 'Comunicação',
+    icon: Megaphone,
     items: [
-      { href: '/admin/anuncios',   label: 'Anúncios',   icon: Megaphone,     perm: 'anuncios' },
+      { href: '/admin/site', label: 'Site e aparência', icon: Palette, perm: null, adminOnly: true },
+      { href: '/admin/qrcodes', label: 'QR Codes e mesas', icon: QrCode, perm: 'qrcodes', module: 'restaurante' },
+      { href: '/admin/anuncios', label: 'Anúncios', icon: Megaphone, perm: 'anuncios' },
       { href: '/admin/mensageria', label: 'Mensageria', icon: MessageSquare, perm: 'anuncios' },
-      { href: '/admin/timer',      label: 'Timers',     icon: Timer,         perm: 'timers' },
+      { href: '/admin/email', label: 'E-mail', icon: Mail, perm: null, adminOnly: true },
+      { href: '/admin/eventos', label: 'Eventos', icon: PartyPopper, perm: 'eventos', module: 'eventos' },
+      { href: '/admin/timer', label: 'Timers', icon: Timer, perm: 'timers' },
     ],
   },
   {
-    label: 'Compliance',
+    label: 'Configurações',
+    icon: Settings,
     items: [
-      { href: '/admin/lgpd',             label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
-      { href: '/admin/primeiros-passos', label: 'Primeiros Passos', icon: Rocket, perm: null },
-      { href: '/admin/sobre',            label: 'Sobre o Sistema',  icon: Info,   perm: null },
+      { href: '/admin/configuracoes', label: 'Minhas preferências', icon: Settings, perm: null },
+      // adminOnly: dado de cobrança é do dono da loja, não de quem opera o caixa.
+      // O backend enforça o mesmo com [Authorize(Roles = "Admin")].
+      { href: '/admin/assinatura', label: 'Assinatura', icon: ReceiptText, perm: null, adminOnly: true },
+      { href: '/admin/integracoes', label: 'Integrações', icon: Plug, perm: null, adminOnly: true },
+      { href: '/admin/ia-config', label: 'Assistente de IA', icon: Sparkles, perm: null, adminOnly: true, module: 'ia' },
+      { href: '/admin/lgpd', label: 'LGPD e auditoria', icon: Shield, perm: 'lgpd' },
     ],
   },
   {
-    label: 'Pessoal',
+    label: 'Ajuda',
+    icon: CircleHelp,
     items: [
-      { href: '/admin/configuracoes', label: 'Configurações', icon: Settings, perm: null },
+      { href: '/admin/primeiros-passos', label: 'Guia inicial', icon: Rocket, perm: null },
+      { href: '/admin/suporte', label: 'Suporte', icon: LifeBuoy, perm: 'suporte' },
+      { href: '/admin/sobre', label: 'Sobre o sistema', icon: Info, perm: null },
     ],
   },
 ]
@@ -121,20 +124,40 @@ export interface NavVisibilityCtx {
 }
 
 export function isItemVisible(item: NavItem, ctx: NavVisibilityCtx): boolean {
+  if (item.adminOnly && !ctx.isAdmin) return false
   if (item.module && !ctx.enabledModules.includes(item.module)) return false
   return item.perm === null || ctx.hasPerm(item.perm)
 }
 
 export function visibleSections(ctx: NavVisibilityCtx): NavSection[] {
   return NAV_SECTIONS
-    .filter(s => !s.adminOnly || ctx.isAdmin)
-    .map(s => ({ ...s, items: s.items.filter(i => isItemVisible(i, ctx)) }))
-    .filter(s => s.items.length > 0)
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => isItemVisible(item, ctx)),
+    }))
+    .filter(section => section.items.length > 0)
 }
 
-/** Ordem de preferência da barra inferior do celular: as quatro telas de uso
- * diário de quem opera a loja no balcão. O quinto slot é sempre "Menu". Itens
- * sem permissão/módulo caem fora e o próximo da fila assume o lugar. */
+const ALL_ITEMS = NAV_SECTIONS.flatMap(section => section.items)
+
+/** Retorna somente a rota mais específica; evita dois itens ativos em rotas filhas. */
+export function currentNavItem(pathname: string): NavItem | null {
+  return [...ALL_ITEMS]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find(item => pathname === item.href || pathname.startsWith(item.href + '/')) ?? null
+}
+
+export function currentNavSection(pathname: string, ctx: NavVisibilityCtx): NavSection | null {
+  const current = currentNavItem(pathname)
+  if (!current) return null
+  return visibleSections(ctx).find(section => section.items.some(item => item.href === current.href)) ?? null
+}
+
+export function isCurrentNavItem(pathname: string, href: string): boolean {
+  return currentNavItem(pathname)?.href === href
+}
+
+/** Ordem de preferência da barra inferior do celular. O quinto slot é Menu. */
 const TAB_BAR_ORDER = [
   '/admin/venda-avulsa',
   '/admin/comanda',
@@ -144,23 +167,17 @@ const TAB_BAR_ORDER = [
   '/admin/financeiro',
 ]
 
-const ALL_ITEMS = NAV_SECTIONS.flatMap(s => s.items)
+const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(section => section.items)
 
-/** Até 4 itens para a barra inferior, respeitando permissões e módulos. */
+/** Até 4 itens de uso diário, respeitando permissões e módulos. */
 export function tabBarItems(ctx: NavVisibilityCtx): NavItem[] {
   return TAB_BAR_ORDER
-    .map(href => ALL_ITEMS.find(i => i.href === href))
-    .filter((i): i is NavItem => !!i && isItemVisible(i, ctx))
+    .map(href => ALL_NAV_ITEMS.find(item => item.href === href))
+    .filter((item): item is NavItem => !!item && isItemVisible(item, ctx))
     .slice(0, 4)
 }
 
-/** Título da tela atual — usado na barra superior do celular, onde não há
- * sidebar visível dizendo onde o usuário está. */
+/** Título da tela atual usado na barra superior do celular. */
 export function currentNavTitle(pathname: string): string | null {
-  // Mais específico primeiro: /admin/lgpd/documento/1 deve casar com LGPD, e
-  // não parar num prefixo mais curto que também case.
-  const match = [...ALL_ITEMS]
-    .sort((a, b) => b.href.length - a.href.length)
-    .find(i => pathname === i.href || pathname.startsWith(i.href + '/'))
-  return match?.label ?? null
+  return currentNavItem(pathname)?.label ?? null
 }

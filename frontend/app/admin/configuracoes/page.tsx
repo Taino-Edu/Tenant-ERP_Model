@@ -71,9 +71,9 @@ export default function ConfiguracoesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Settings className="w-6 h-6 text-brand-400" /> Configurações
+            <Settings className="w-6 h-6 text-brand-400" /> Minhas preferências
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Preferências salvas por perfil de usuário</p>
+          <p className="text-gray-500 text-sm mt-0.5">Ajustes pessoais deste usuário — sem alterar a configuração da loja</p>
         </div>
         {saving && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
       </div>

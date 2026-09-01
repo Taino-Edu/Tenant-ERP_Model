@@ -160,7 +160,10 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
               ))}
             </select>
             {perfis.length === 0 && (
-              <p className="text-xs text-amber-400 mt-1">⚠ Nenhum perfil criado ainda. Crie perfis em <strong>Perfis de Acesso</strong> primeiro.</p>
+              <p className="text-xs text-amber-400 mt-1">
+                Nenhum perfil criado ainda.{' '}
+                <Link href="/admin/perfis" className="font-semibold underline">Criar perfil de acesso</Link>
+              </p>
             )}
           </div>
           <div className="flex gap-3 pt-2">
@@ -668,6 +671,12 @@ export default function UsuariosPage() {
   const [showMobileDetail, setShowMobileDetail] = useState(false)
   const [novosClientesMes, setNovosClientesMes] = useState(0)
 
+  // Permite que Equipe e acessos leve diretamente à etapa certa do fluxo.
+  useEffect(() => {
+    const aba = new URLSearchParams(window.location.search).get('aba')
+    if (aba === 'operadores') setTabSection('operadores')
+  }, [])
+
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
     try {
@@ -836,6 +845,9 @@ export default function UsuariosPage() {
               <UserCog className="w-10 h-10 opacity-30" />
               <p className="text-sm">Nenhum operador cadastrado.</p>
               <p className="text-xs text-gray-600">Crie operadores para dar acesso ao painel com permissões limitadas.</p>
+              <Link href="/admin/perfis" className="text-xs font-semibold text-brand-400 hover:underline">
+                Preparar perfis de acesso →
+              </Link>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -5,6 +5,7 @@ import KeyboardShortcutsOverlay from '@/components/admin/KeyboardShortcutsOverla
 import TimerAlarmOverlay from '@/components/admin/TimerAlarmOverlay'
 import TenantColorInjector, { BRAND_CACHE_KEY } from '@/components/admin/TenantColorInjector'
 import UsageTracker from '@/components/admin/UsageTracker'
+import AdminAreaSubnav from '@/components/admin/AdminAreaSubnav'
 import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -115,6 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             error:   { iconTheme: { primary: '#FF3B30', secondary: '#fff' } },
           }}
         />
+        <AdminAreaSubnav />
         {children}
       </main>
       {site.enabledModules.includes('ia') && canUseAi ? <AiChatWidget /> : null}

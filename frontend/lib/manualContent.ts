@@ -13,8 +13,23 @@ export interface ManualSectionData {
 
 export const MANUAL_SECOES: ManualSectionData[] = [
   {
+    num: '00',
+    titulo: 'Como navegar pelo painel',
+    cor: '#38BDF8',
+    itens: [
+      { t: 'Oito áreas principais', d: 'O menu foi organizado por tarefa: Início, Vendas, Produtos, Clientes e equipe, Financeiro, Comunicação, Configurações e Ajuda.' },
+      { t: 'Páginas dentro da área', d: 'Depois de escolher uma área, use a barra no topo para abrir suas páginas. No celular, toque em “Trocar página” para ver a lista completa sem opções cortadas.' },
+      { t: 'Atalhos do celular', d: 'Caixa, Comanda, Início e Estoque ficam fixos na barra inferior. O botão Menu abre as demais áreas.' },
+      { t: 'Acesso gradual', d: 'Cada operador vê apenas as áreas e páginas liberadas pelo perfil, pelas permissões e pelos módulos ativos da loja.' },
+      { t: 'Ajuda no contexto', d: 'Primeiros Passos apresenta a sequência inicial de trabalho; o Manual detalha todos os procedimentos e pode ser impresso ou salvo em PDF.' },
+    ],
+    dicas: [
+      'Se não encontrar uma função, comece pela área que representa a tarefa — por exemplo, anúncios ficam em Comunicação e perfis ficam em Clientes e equipe.',
+    ],
+  },
+  {
     num: '01',
-    titulo: 'Dashboard',
+    titulo: 'Início e visão geral',
     cor: '#00F0A8',
     itens: [
       { t: 'Comandas em destaque', d: 'Ao abrir o dashboard, as comandas ativas aparecem imediatamente, sem scroll. Os 4 KPIs no topo (comandas ativas, receita do dia, valor em aberto, estoque baixo) ficam sempre visíveis.' },
@@ -24,7 +39,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Atualização automática', d: 'Intervalo configurável: 15s, 30s, 1 minuto ou manual. Também recebe eventos em tempo real via SignalR.' },
     ],
     dicas: [
-      'Quais painéis aparecem na tab Análises é controlado em Configurações → Dashboard.',
+      'Quais painéis aparecem na tab Análises é controlado em Configurações → Minhas preferências → Dashboard.',
       'O esquema de cores do gráfico (Padrão, Azul, Neon) é configurável por usuário.',
     ],
   },
@@ -67,7 +82,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Analytics do PDV', d: 'Histórico com gráfico de pico de horário, top produtos vendidos no período e breakdown por forma de pagamento.' },
     ],
     dicas: [
-      'O desconto padrão (0 a 20%) pode ser pré-configurado em Configurações → Frente de Caixa.',
+      'O desconto padrão (0 a 20%) pode ser pré-configurado em Configurações → Minhas preferências → Frente de Caixa.',
       'Sem cliente selecionado, a venda é anônima — aparece apenas nos relatórios gerais.',
       'Se a venda foi registrada sem nota, dá pra emitir depois no detalhe da venda (histórico do PDV).',
     ],
@@ -209,9 +224,9 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     cor: '#A78BFA',
     itens: [
       { t: 'O que são perfis', d: 'Perfis permitem criar usuários operadores com acesso restrito. Você define quais módulos cada perfil pode acessar.' },
-      { t: 'Criar um perfil', d: 'Vá em Administração → Perfis de Acesso → Novo Perfil. Dê um nome (ex: "Caixa") e marque as permissões desejadas.' },
-      { t: 'Permissões disponíveis', d: 'Dashboard, PDV, Comandas, Estoque, Categorias, Clientes, Crediário, Financeiro, Relatórios, Anúncios, QR Codes e LGPD.' },
-      { t: 'Atribuir perfil a operador', d: 'Em Clientes → aba Operadores, crie ou edite um operador e selecione o perfil. O operador verá apenas os módulos do perfil ao fazer login.' },
+      { t: 'Criar um perfil', d: 'Vá em Clientes e equipe → Perfis de acesso. Comece por um modelo como Caixa, Atendimento, Estoque, Gerente ou Contador e personalize somente se precisar.' },
+      { t: 'Permissões disponíveis', d: 'As permissões avançadas ficam recolhidas por padrão e incluem Início, Vendas, Produtos, Clientes e equipe, Financeiro, Comunicação e páginas administrativas.' },
+      { t: 'Atribuir perfil a operador', d: 'Em Clientes e equipe → Clientes e operadores → aba Operadores, crie ou edite o operador e selecione o perfil. Ele verá apenas as áreas permitidas ao entrar.' },
       { t: 'Alterar permissões', d: 'Edite o perfil a qualquer momento. As mudanças valem na próxima vez que o operador fizer login.' },
       { t: 'Excluir perfil', d: 'Só é possível excluir um perfil se nenhum operador estiver usando. Reatribua os operadores antes.' },
     ],
@@ -225,7 +240,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Anúncios, Banners & Catálogo TCG',
     cor: '#FB7185',
     itens: [
-      { t: 'Criar anúncio', d: 'Vá em Anúncios → Novo. Escolha o tipo, escreva o texto, adicione imagem e defina data de expiração se necessário.' },
+      { t: 'Criar anúncio', d: 'Vá em Comunicação → Anúncios e banners → Novo. Escolha o tipo, escreva o texto, adicione imagem e defina data de expiração se necessário.' },
       { t: 'Banners do hero', d: 'Aparecem como fundo rotativo do hero da landing page. Cadastre múltiplos banners para rotação automática.' },
       { t: 'Avisos e destaques', d: 'Carrossel rotativo abaixo do hero com setas de navegação. Pausa automaticamente ao tocar.' },
       { t: 'Expiração automática', d: 'Defina uma data de expiração e o anúncio some automaticamente. Útil para promoções com prazo.' },
@@ -241,7 +256,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Gestão', d: 'U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, I → Fiscal, M → Mensageria, T → Timer e S → Configurações.' },
       { t: 'Ajuda', d: 'H abre o manual, 1 abre Primeiros Passos e ? (shift + /) mostra o painel com todos os atalhos disponíveis para seu perfil.' },
       { t: 'Fechar com Esc', d: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos. Funciona em qualquer contexto.' },
-      { t: 'Badges no menu lateral', d: 'Ao passar o mouse sobre um item do menu no desktop, aparece a tecla de atalho correspondente em destaque ao lado do nome.' },
+      { t: 'Painel de atalhos', d: 'Pressione ? fora de campos de texto para ver somente os atalhos disponíveis para seu perfil e para os módulos ativos da loja.' },
       { t: 'Digitação protegida', d: 'Nenhum atalho global — nem mesmo ? — é acionado enquanto você escreve em campos, buscas, formulários ou no Assistente de IA. Esc continua disponível para fechar painéis.' },
     ],
     dicas: [
@@ -408,7 +423,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Personalizar Site',
     cor: '#F59E0B',
     itens: [
-      { t: 'Onde fica', d: 'Admin → Personalizar Site (seção Administração no menu). Formulário simples — preenche e clica em Salvar, sem precisar mexer em código.' },
+      { t: 'Onde fica', d: 'Comunicação → Aparência da loja. O formulário permite personalizar a página pública sem precisar mexer em código.' },
       { t: 'Identidade', d: 'Nome do site (aparece na navbar, título principal e rodapé), frase de apresentação abaixo do título, endereço/cidade e nome de quem atende (usado em textos como "Falar com [nome]").' },
       { t: 'Contato', d: 'Número de WhatsApp (com DDI, ex: 5517999999999) e e-mail de contato — usados no botão flutuante, rodapé e nos links de "falar no WhatsApp" da landing page.' },
       { t: 'Cores', d: 'Cor primária (azul), cor de destaque (amarelo), cor da navbar, fundo da página e fundo dos cards — escolha pelo seletor de cor ou digite o código hexadecimal. Fundo e cards só valem no modo claro; o modo escuro mantém a paleta própria dele.' },
@@ -420,7 +435,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     dicas: [
       'Enquanto nada é preenchido, o site continua exatamente como está hoje — todo campo já vem com o valor atual como padrão.',
       'Esse painel é a base pro sistema virar white-label no futuro — quanto mais aqui, menos precisa mexer em código depois.',
-      'O menu lateral do admin (Painel Geral, Estoque, etc.) ainda não é personalizável por aqui — só a página pública.',
+      'A identidade da página pública é personalizável; a organização do painel permanece igual para manter a navegação previsível, respeitando as permissões de cada perfil.',
     ],
   },
   {
