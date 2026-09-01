@@ -87,7 +87,7 @@ public class PublicDirectoryController : ControllerBase
             .Select(t => new { t.Id, t.SchemaName, t.EnabledModules })
             .FirstOrDefaultAsync();
 
-        if (tenant is null) return NotFound();
+        if (tenant is null) return NotFound(new { errorCode = "tenant_unavailable" });
 
         using var scope = _scopeFactory.CreateScope();
         var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
