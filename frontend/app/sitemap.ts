@@ -4,7 +4,7 @@ import { canonicalBaseForHost, isPlatformHost } from '@/lib/seo'
 import { getPublicProductsForSitemap } from '@/lib/serverSitemap'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const host = headers().get('host')
+  const host = (await headers()).get('host')
   const siteUrl = canonicalBaseForHost(host)
   const updated = new Date('2026-08-21T00:00:00-03:00')
 

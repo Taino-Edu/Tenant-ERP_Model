@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { perfisApi, PerfilDto, getErrorMessage } from '@/lib/api'
 import { UserCog, Plus, Trash2, Edit2, Check, X, Loader2, Shield, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Link from 'next/link'
 
 const PERMISSOES_LABELS: Record<string, string> = {
   dashboard:   'Painel Geral',
@@ -27,6 +28,14 @@ const PERMISSOES_LABELS: Record<string, string> = {
 
 const ALL_PERMS = Object.keys(PERMISSOES_LABELS)
 
+const PERFIL_MODELOS = [
+  { nome: 'Caixa', descricao: 'Vende, recebe e atende comandas', permissoes: ['pdv', 'comandas', 'usuarios', 'crediario'] },
+  { nome: 'Atendimento', descricao: 'Atende clientes e mesas', permissoes: ['comandas', 'usuarios', 'qrcodes', 'restaurante', 'suporte'] },
+  { nome: 'Estoque', descricao: 'Cuida de produtos e reposição', permissoes: ['estoque', 'categorias'] },
+  { nome: 'Gerente', descricao: 'Acompanha a operação e resultados', permissoes: ['dashboard', 'pdv', 'comandas', 'estoque', 'categorias', 'usuarios', 'crediario', 'financeiro', 'relatorios'] },
+  { nome: 'Contador', descricao: 'Acessa financeiro, fiscal e documentos', permissoes: ['dashboard', 'financeiro', 'relatorios', 'fiscal', 'lgpd'] },
+] as const
+
 // ── Formulário de perfil ──────────────────────────────────────────────────────
 
 function PerfilForm({
@@ -43,6 +52,7 @@ function PerfilForm({
     new Set(initial?.permissoes ?? [])
   )
   const [saving, setSaving] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(Boolean(initial))
 
   function toggle(p: string) {
     setSelecionadas(prev => {
@@ -54,6 +64,11 @@ function PerfilForm({
 
   function selectAll() { setSelecionadas(new Set(ALL_PERMS)) }
   function clearAll()  { setSelecionadas(new Set()) }
+
+  function applyTemplate(template: typeof PERFIL_MODELOS[number]) {
+    if (!nome.trim()) setNome(template.nome)
+    setSelecionadas(new Set(template.permissoes))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -79,39 +94,78 @@ function PerfilForm({
         />
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-400">Permissões</span>
-          <div className="flex gap-2">
-            <button type="button" onClick={selectAll} className="text-xs text-brand-400 hover:underline">Todas</button>
-            <span className="text-gray-600">·</span>
-            <button type="button" onClick={clearAll}  className="text-xs text-gray-500 hover:underline">Nenhuma</button>
+      {!initial && (
+        <fieldset>
+          <legend className="mb-2 text-xs text-gray-400">Comece por um modelo</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {PERFIL_MODELOS.map(template => {
+              const selected = template.permissoes.length === selecionadas.size
+                && template.permissoes.every(permission => selecionadas.has(permission))
+              return (
+                <button
+                  key={template.nome}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  aria-pressed={selected}
+                  className={`rounded-xl border p-3 text-left transition-colors ${selected
+                    ? 'border-brand-500/50 bg-brand-500/10'
+                    : 'border-surface-500 bg-surface-700 hover:border-surface-300'}`}
+                >
+                  <span className="block text-sm font-semibold text-white">{template.nome}</span>
+                  <span className="mt-0.5 block text-xs text-gray-500">{template.descricao}</span>
+                </button>
+              )
+            })}
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {ALL_PERMS.map(p => (
-            <label
-              key={p}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm
-                ${selecionadas.has(p)
-                  ? 'border-brand-500/50 bg-brand-500/10 text-white'
-                  : 'border-surface-500 bg-surface-700 text-gray-400 hover:border-surface-300'}`}
-            >
-              <input
-                type="checkbox"
-                className="hidden"
-                checked={selecionadas.has(p)}
-                onChange={() => toggle(p)}
-              />
-              <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors
-                ${selecionadas.has(p) ? 'bg-brand-500 border-brand-500' : 'border-gray-600'}`}>
-                {selecionadas.has(p) && <Check className="w-2.5 h-2.5 text-black" />}
+        </fieldset>
+      )}
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(value => !value)}
+          aria-expanded={showAdvanced}
+          className="flex w-full items-center justify-between rounded-xl border border-surface-500 bg-surface-700 px-3 py-2.5 text-left text-sm text-gray-300 hover:border-surface-300"
+        >
+          <span>Personalizar permissões</span>
+          <span className="text-xs text-gray-500">{selecionadas.size} selecionadas · {showAdvanced ? 'Recolher' : 'Abrir'}</span>
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400">Acesso detalhado</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={selectAll} className="text-xs text-brand-400 hover:underline">Todas</button>
+                <span className="text-gray-600">·</span>
+                <button type="button" onClick={clearAll} className="text-xs text-gray-500 hover:underline">Nenhuma</button>
               </div>
-              {PERMISSOES_LABELS[p]}
-            </label>
-          ))}
-        </div>
-        <p className="text-xs text-gray-600 mt-2">{selecionadas.size} de {ALL_PERMS.length} permissões selecionadas</p>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {ALL_PERMS.map(p => (
+                <label
+                  key={p}
+                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors
+                    ${selecionadas.has(p)
+                      ? 'border-brand-500/50 bg-brand-500/10 text-white'
+                      : 'border-surface-500 bg-surface-700 text-gray-400 hover:border-surface-300'}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={selecionadas.has(p)}
+                    onChange={() => toggle(p)}
+                  />
+                  <div className={`h-4 w-4 flex-shrink-0 rounded border flex items-center justify-center transition-colors
+                    ${selecionadas.has(p) ? 'bg-brand-500 border-brand-500' : 'border-gray-600'}`}>
+                    {selecionadas.has(p) && <Check className="w-2.5 h-2.5 text-black" />}
+                  </div>
+                  {PERMISSOES_LABELS[p]}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 pt-2">
@@ -256,8 +310,8 @@ export default function PerfisPage() {
             <UserCog className="w-5 h-5 text-brand-400" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-white">Perfis de Acesso</h1>
-            <p className="text-sm text-gray-500">Crie perfis com permissões customizadas para operadores</p>
+            <h1 className="text-xl font-bold text-white">Equipe e acessos</h1>
+            <p className="text-sm text-gray-500">Defina o que cada pessoa precisa ver para trabalhar</p>
           </div>
         </div>
         {!creating && !editing && (
@@ -311,8 +365,11 @@ export default function PerfisPage() {
       <div className="mt-8 p-4 rounded-xl bg-surface-700 border border-surface-500 text-xs text-gray-500 space-y-1">
         <p className="font-semibold text-gray-400">Como funciona?</p>
         <p>1. Crie um perfil com um nome livre (ex: "Caixa") e marque as permissões desejadas.</p>
-        <p>2. Em <strong className="text-gray-300">Clientes → aba Operadores</strong>, crie um usuário do tipo Operador e atribua o perfil.</p>
+        <p>2. Cadastre o operador e atribua o perfil criado.</p>
         <p>3. O operador verá apenas as seções permitidas ao fazer login.</p>
+        <Link href="/admin/usuarios?aba=operadores" className="mt-3 inline-flex font-semibold text-brand-400 hover:underline">
+          Gerenciar operadores →
+        </Link>
       </div>
     </div>
   )

@@ -24,7 +24,7 @@ import { PLATFORM_URL } from '@/lib/seo'
  * são os mesmos, não há divergência para explicar.
  */
 export default async function OperadorDaPlataforma() {
-  const icons = await getTenantIconsForHost(headers().get('host'))
+  const icons = await getTenantIconsForHost((await headers()).get('host'))
   const nomeDaLoja = icons?.siteName
 
   // Sem tenant resolvido (domínio da plataforma, ou API fora do ar) não há o

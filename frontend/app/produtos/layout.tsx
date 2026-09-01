@@ -11,7 +11,7 @@ import { getTenantIconsForHost, resolveShareImage } from '@/lib/serverSiteConfig
 // mesma descrição, competindo entre si por uma busca que devia levar ao
 // catálogo.
 export async function generateMetadata(): Promise<Metadata> {
-  const icons = await getTenantIconsForHost(headers().get('host'))
+  const icons = await getTenantIconsForHost((await headers()).get('host'))
   const siteName = icons?.siteName || 'Loja'
 
   return {

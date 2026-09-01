@@ -2,11 +2,11 @@ import type { MetadataRoute } from 'next'
 import { headers } from 'next/headers'
 import { canonicalBaseForHost } from '@/lib/seo'
 
-export default function robots(): MetadataRoute.Robots {
+export default async function robots(): Promise<MetadataRoute.Robots> {
   // Resolvido por host: cada loja tem o SEU sitemap. Fixo no domínio da
   // plataforma, o `robots.txt` de toda vitrine mandava o buscador para um
   // sitemap que não fala das páginas daquela loja.
-  const siteUrl = canonicalBaseForHost(headers().get('host'))
+  const siteUrl = canonicalBaseForHost((await headers()).get('host'))
 
   return {
     rules: {

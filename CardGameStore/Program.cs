@@ -7,7 +7,6 @@ using System.Net;
 using System.IO.Compression;
 using System.Reflection;
 using System.Text;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using CardGameStore.Configuration;
 using CardGameStore.Data;
@@ -19,7 +18,6 @@ using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using CardGameStore.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -254,137 +252,10 @@ builder.Services
     .WithTools<CardGameStore.Mcp.ErpTools>();
 
 // ---------------------------------------------------------------------------
-// 6. RATE LIMITING — Proteção contra força bruta e abuso de API
-//
-// "auth"  → endpoints de login/refresh: 5 tentativas/minuto por IP.
-//           Bloqueia ataques de força bruta sem afetar uso normal.
-// "api"   → demais endpoints: 200 req/minuto por IP.
-//           Evita scraping e abusos de bots.
+// 6. RATE LIMITING — cotas por origem/tenant/usuário, nunca globais por política.
+// UseForwardedHeaders e autenticação devem executar antes de UseRateLimiter.
 // ---------------------------------------------------------------------------
-builder.Services.AddRateLimiter(options =>
-{
-    // Cloudflare encaminha o IP real do cliente em CF-Connecting-IP.
-    // Usar RemoteIpAddress aqui resultaria no IP do nó Cloudflare, fazendo todos os
-    // usuários compartilharem o mesmo bucket de rate limiting.
-    static string GetClientIp(HttpContext ctx) =>
-        ctx.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
-        ?? ctx.Connection.RemoteIpAddress?.ToString()
-        ?? "unknown";
-
-    static string GetGlobalPartition(HttpContext ctx)
-    {
-        var tenantId = ctx.RequestServices.GetRequiredService<ITenantContext>().TenantId;
-        var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-            ?? ctx.User.FindFirst("sub")?.Value;
-        return userId is { Length: > 0 }
-            ? $"{tenantId:N}:user:{userId}"
-            : $"{tenantId:N}:ip:{GetClientIp(ctx)}";
-    }
-
-    // Política global — protege TODOS os endpoints sem [EnableRateLimiting] explícito
-    // 300 req/min por IP é generoso o suficiente para uso legítimo
-    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(
-        context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
-            GetGlobalPartition(context),
-            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
-            {
-                PermitLimit          = 300,
-                Window               = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit           = 0
-            }));
-
-    options.AddFixedWindowLimiter("auth", opt =>
-    {
-        opt.PermitLimit              = 15; // era 5 — QA testando várias contas com autofill errado batia nisso toda hora
-        opt.Window                   = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder     = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit               = 0; // sem fila — rejeita imediatamente
-    });
-
-    options.AddPolicy("integration-token", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            context.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
-            ?? context.Connection.RemoteIpAddress?.ToString()
-            ?? "unknown",
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0,
-            }));
-
-    options.AddFixedWindowLimiter("api", opt =>
-    {
-        opt.PermitLimit          = 200;
-        opt.Window               = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 10;
-    });
-
-    // Assistente comercial público: limite baixo por IP para controlar custo e abuso.
-    options.AddPolicy("public-ai", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit          = 10,
-                Window               = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit           = 0,
-            }));
-
-    // Formulário institucional: evita spam e crescimento artificial da tabela
-    // de leads. Turnstile será a segunda camada quando as chaves forem ativadas.
-    options.AddPolicy("public-lead", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(15),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0,
-            }));
-
-    // "locate-account" → bem mais apertado que "auth": cada chamada testa a
-    // senha contra TODO tenant ativo (um schema por vez), bem mais caro que um
-    // login normal (uma query só). 5/hora por IP é suficiente pro uso real
-    // (clicar "procurar em outro lugar" depois de um login falhado de verdade),
-    // sem abrir uma forma barata de forçar senha contra todas as lojas de uma vez.
-    options.AddFixedWindowLimiter("locate-account", opt =>
-    {
-        opt.PermitLimit          = 5;
-        opt.Window               = TimeSpan.FromHours(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 0;
-    });
-
-    // "comanda-hub" → conexões (negotiate + upgrade) ao ComandaHub: 30/minuto
-    // por IP. JoinComandaGroup já valida dono da comanda antes de entrar no
-    // grupo, mas não impedia spam de tentativas de conexão (DoS/botting) —
-    // isso cobre esse ponto. 30/min é generoso pra WebSocket normal (só 1-2
-    // requests por sessão) e pro fallback de long-polling (poll periódico,
-    // bem abaixo de 30/min em uso normal); só limita tentativa de conexão
-    // repetida em rajada.
-    options.AddFixedWindowLimiter("comanda-hub", opt =>
-    {
-        opt.PermitLimit          = 30;
-        opt.Window               = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit           = 0;
-    });
-
-    options.OnRejected = async (context, token) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.Headers["Retry-After"] = "60";
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            new { Message = "Muitas requisições. Aguarde 1 minuto antes de tentar novamente." },
-            cancellationToken: token);
-    };
-});
+builder.Services.AddRateLimiter(RequestRateLimits.Configure);
 
 // ---------------------------------------------------------------------------
 // 7. TIMEOUT DE REQUISIÇÃO — Evita que requests lentos prendam threads

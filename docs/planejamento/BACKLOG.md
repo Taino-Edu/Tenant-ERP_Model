@@ -418,7 +418,7 @@
 
 ### MKT-002 — Stack gratuita de analytics e mídia com consentimento
 
-- **Estado:** `PRONTO PARA FAZER` após criação das contas/IDs.
+- **Estado:** `PARCIAL`; base GTM/Meta com consentimento e eventos comerciais no código. Faltam contas/IDs, validação real, demais pixels e eventos de cadastro/teste/pagamento com deduplicação.
 - **Stack:** Google Tag Manager como ponto único; GA4; conversões do Google Ads;
   Meta Pixel; TikTok Pixel; LinkedIn Insight Tag; Microsoft Clarity.
 - **Eventos mínimos:** `view_pricing`, `whatsapp_click`, `lead_submit`,

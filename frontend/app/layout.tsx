@@ -7,6 +7,7 @@ import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
+import MarketingTags from '@/components/MarketingTags'
 import { getTenantIconsForHost, resolveShareImage, withCacheBust } from '@/lib/serverSiteConfig'
 
 export const viewport: Viewport = {
@@ -21,7 +22,7 @@ export const viewport: Viewport = {
 // navegador e no snippet do Google pra cada loja. Fallback genérico
 // ("Octus") em qualquer falha — getTenantIconsForHost nunca lança.
 export async function generateMetadata(): Promise<Metadata> {
-  const host = headers().get('host')
+  const host = (await headers()).get('host')
   const icons = await getTenantIconsForHost(host)
 
   const iconUrl = icons?.faviconUrl
@@ -140,6 +141,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Footer />
         {/* Banner de consentimento de cookies (LGPD Art. 8°) */}
         <CookieBanner />
+        {/* GTM/Meta só são carregados depois da escolha correspondente. */}
+        <MarketingTags />
         {/* Botão flutuante de instalação PWA — aparece quando o Chrome suporta */}
         <PWAInstallButton />
         </ClientProviders>

@@ -2,7 +2,8 @@ const { cpSync, existsSync } = require('node:fs')
 const { resolve } = require('node:path')
 
 const projectRoot = resolve(__dirname, '..')
-const standaloneRoot = resolve(projectRoot, '.next', 'standalone')
+const distDir = process.env.NEXT_DIST_DIR || '.next'
+const standaloneRoot = resolve(projectRoot, distDir, 'standalone')
 const serverEntry = resolve(standaloneRoot, 'server.js')
 
 if (!existsSync(serverEntry)) {
@@ -14,7 +15,7 @@ cpSync(resolve(projectRoot, 'public'), resolve(standaloneRoot, 'public'), {
   recursive: true,
   force: true,
 })
-cpSync(resolve(projectRoot, '.next', 'static'), resolve(standaloneRoot, '.next', 'static'), {
+cpSync(resolve(projectRoot, distDir, 'static'), resolve(standaloneRoot, distDir, 'static'), {
   recursive: true,
   force: true,
 })

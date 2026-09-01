@@ -7,8 +7,10 @@ import {
   Banknote,
   BookOpen,
   CheckCircle2,
+  Compass,
   FileCheck2,
   Keyboard,
+  Lightbulb,
   Package,
   Rocket,
   ShoppingBag,
@@ -16,6 +18,20 @@ import {
 } from 'lucide-react'
 
 const PASSOS = [
+  {
+    fase: 'Orientar-se',
+    icon: Compass,
+    cor: '#38BDF8',
+    titulo: 'Encontre qualquer função sem se perder',
+    onde: '/admin/dashboard',
+    ondeLabel: 'Ir para Início',
+    passos: [
+      'Escolha uma das 8 áreas do menu: Início, Vendas, Produtos, Clientes e equipe, Financeiro, Comunicação, Configurações ou Ajuda',
+      'As páginas daquela área aparecem no topo; no celular, toque em “Trocar página”',
+      'O menu mostra somente o que o seu perfil e os módulos ativos permitem usar',
+    ],
+    dica: 'No celular, Caixa, Comanda, Início e Estoque ficam sempre acessíveis embaixo; use Menu para abrir as outras áreas.',
+  },
   {
     fase: 'Preparar',
     icon: Package,
@@ -78,7 +94,7 @@ const PASSOS = [
     cor: '#A78BFA',
     titulo: 'Feche a conferência do dia',
     onde: '/admin/dashboard',
-    ondeLabel: 'Ir para Painel Geral',
+    ondeLabel: 'Ir para Início',
     passos: [
       'Compare vendas, formas de pagamento, comandas abertas e estoque',
       'Confira no Financeiro se os recebimentos entraram no período correto',
@@ -108,7 +124,7 @@ export default function PrimeirosPassosPage() {
       <PageHeader
         icon={Rocket}
         title="Primeiros Passos"
-        description="Da preparação do produto à conferência fiscal e financeira"
+        description="Aprenda a navegar e conclua a primeira operação passo a passo"
       />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -139,8 +155,9 @@ export default function PrimeirosPassosPage() {
               ))}
             </ol>
 
-            <p className="mb-4 rounded-lg border-l-2 bg-surface-900 px-3 py-2 text-xs leading-relaxed text-gray-400" style={{ borderColor: cor }}>
-              <span aria-hidden>💡 </span>{dica}
+            <p className="mb-4 flex items-start gap-2 rounded-lg border-l-2 bg-surface-900 px-3 py-2 text-xs leading-relaxed text-gray-400" style={{ borderColor: cor }}>
+              <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>{dica}</span>
             </p>
 
             <Link

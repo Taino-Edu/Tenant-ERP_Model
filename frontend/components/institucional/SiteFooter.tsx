@@ -6,6 +6,7 @@
 import Link from 'next/link'
 import { Instagram, Linkedin, Youtube, Facebook } from 'lucide-react'
 import Logo from '@/components/Logo'
+import { OPEN_COOKIE_SETTINGS_EVENT } from '@/lib/cookieConsent'
 import { CNPJ, CONTACTS, SOCIAL_PROFILES, type InstitucionalTheme } from '@/lib/institucional'
 
 /** O lucide não tem ícone do TikTok (conferido na versão em uso: nenhuma
@@ -59,6 +60,7 @@ export default function SiteFooter({ theme }: { theme: InstitucionalTheme }) {
           <Link href="/parceiros" className="transition octus-accent-hover">Afiliados</Link>
           <Link href="/termos" className="transition octus-accent-hover">Termos</Link>
           <Link href="/privacidade" className="transition octus-accent-hover">Privacidade</Link>
+          <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT))} className="min-h-11 text-left transition octus-accent-hover">Preferências de cookies</button>
         </div>
       </div>
     </footer>

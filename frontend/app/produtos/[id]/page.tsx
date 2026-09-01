@@ -13,16 +13,17 @@ function formatPriceBRL(cents: number): string {
 // 'use client'). Toda a interação (carrinho, login, lista de espera, tema)
 // continua 100% em ProdutoDetalheClient.tsx, sem nenhuma mudança de lógica —
 // esse componente não busca o produto de novo pro client, só pro <head>.
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const host = headers().get('host')
-  const product = await getPublicProductForHost(host, params.id)
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const [{ id }, requestHeaders] = await Promise.all([params, headers()])
+  const host = requestHeaders.get('host')
+  const product = await getPublicProductForHost(host, id)
 
   // O canônico é declarado nos DOIS caminhos, e não por acaso: metadados no
   // App Router são herdados campo a campo do layout acima. O layout de
   // /produtos define `canonical: '/produtos'`, então uma página de produto que
   // não declarasse o próprio herdaria a da listagem — ou seja, diria ao Google
   // "não me indexe, indexe a listagem". Todo o catálogo sumiria da busca.
-  const canonical = `/produtos/${params.id}`
+  const canonical = `/produtos/${id}`
 
   if (!product) return { title: 'Produto', alternates: { canonical } }
 
@@ -56,9 +57,10 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 }
 
-export default async function ProductPage({ params }: { params: { id: string } }) {
-  const host = headers().get('host')
-  const product = await getPublicProductForHost(host, params.id)
+export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const [{ id }, requestHeaders] = await Promise.all([params, headers()])
+  const host = requestHeaders.get('host')
+  const product = await getPublicProductForHost(host, id)
 
   return (
     <>

@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     images: [{ url: '/institutional/octus-hero-waves.png', width: 1672, height: 941, alt: 'Octus ERP para varejo e restaurantes' }],
   },
   twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, images: ['/institutional/octus-hero-waves.png'] },
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
 }
 
 // A empresa, declarada uma vez e referenciada por `@id` pelos outros blocos.

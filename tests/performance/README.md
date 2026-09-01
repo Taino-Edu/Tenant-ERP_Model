@@ -40,6 +40,28 @@ inserir somente o delta.
 Os relatórios gerados pela auditoria ficam fora do Git quando contêm logs brutos;
 o resumo reproduzível e os achados confirmados devem ser documentados no PR.
 
+## Frontend público, cache e metadados
+
+O runner abaixo mede home, `robots.txt` e `sitemap.xml` sem autenticação. Por
+padrão ele recusa destinos remotos para evitar carga acidental em produção:
+
+```powershell
+.\tests\performance\public-web-load.ps1 `
+  -BaseUrl http://exemplosvisual.localhost:3000 `
+  -Concurrency 4 -Iterations 3
+```
+
+Além de status, bytes e requisições por segundo, o resultado mostra
+`Cache-Control`, `Content-Type`, erros e latência p50/p95/p99 por requisição
+(inclui leitura do corpo; percentis pelo método nearest-rank). Requer PowerShell 7.
+Caminhos fora da origem são recusados e redirecionamentos não são seguidos;
+um 3xx aparece no resultado, não representa sucesso da página de destino.
+Falhas de conexão/timeout entram na contagem de erros sem ocultar o restante
+do lote. Avalie o campo `errors`, não apenas o exit code do script.
+Poucas amostras servem para smoke, não para estimar capacidade máxima.
+Para um ambiente remoto autorizado, use
+`-AllowRemote`, concorrência baixa e uma janela combinada com a operação.
+
 Para medir a API sem gravar credenciais no repositório, defina a senha somente
 no processo atual e use o runner HTTP. O teste faz login, dispara lotes realmente
 concorrentes e resume throughput, status e tamanho médio das respostas:
