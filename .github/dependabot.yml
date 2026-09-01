@@ -13,6 +13,10 @@ updates:
       # O Next resolve o compilador pelo pacote `typescript`; na major 7 ele não
       # o encontra e aborta o lint antes de compilar qualquer coisa. Reabrir
       # quando a versão do Next em uso declarar suporte.
+      #
+      # O Next em si NÃO entra aqui, de propósito: a major dele deve continuar
+      # sendo proposta, porque é por onde chega correção de segurança do
+      # framework.
       - dependency-name: typescript
         update-types: [version-update:semver-major]
 
@@ -30,6 +34,22 @@ updates:
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
+    # A solução tem alvo net8.0. As majors de EF Core, ASP.NET Core e Npgsql
+    # acompanham a major do runtime: EF Core 9 e 10 propostos aqui não são
+    # atualização, são migração de framework, e o build recusa antes disso.
+    # Quando o alvo passar para net9.0/net10.0, esta lista sai junto.
+    ignore:
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "Microsoft.AspNetCore*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "Microsoft.Extensions*"
+        update-types: [version-update:semver-major]
+      - dependency-name: "Npgsql*"
+        update-types: [version-update:semver-major]
+      # Versionado junto com o ASP.NET Core, apesar de não ser da Microsoft.
+      - dependency-name: "AspNetCore.HealthChecks*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
