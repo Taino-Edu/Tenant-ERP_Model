@@ -22,19 +22,19 @@ async function fetchWithTimeout(path, timeout = 10_000) {
 }
 
 async function waitForServer() {
-  for (let attempt = 1; attempt <= 30; attempt++) {
+  for (let attempt = 1; attempt <= 60; attempt++) {
     if (server.exitCode !== null) {
       throw new Error(`Servidor standalone encerrou antes do smoke.\n${serverOutput}`)
     }
     try {
-      const response = await fetchWithTimeout('/termos', 1_000)
+      const response = await fetchWithTimeout('/termos', 3_000)
       if (response.ok) return
     } catch {
       // O processo ainda pode estar inicializando.
     }
     await delay(500)
   }
-  throw new Error(`Servidor standalone não ficou disponível em 15s.\n${serverOutput}`)
+  throw new Error(`Servidor standalone não ficou disponível em 30s.\n${serverOutput}`)
 }
 
 async function assertPage(path, expectedText) {
@@ -48,11 +48,25 @@ async function assertPage(path, expectedText) {
   console.log(`✓ ${path} — HTTP ${response.status}`)
 }
 
+async function assertHeader(path, header, expectedPart) {
+  const response = await fetchWithTimeout(path)
+  const value = response.headers.get(header) || ''
+  if (!response.ok || !value.toLowerCase().includes(expectedPart.toLowerCase())) {
+    throw new Error(`${path} falhou: ${header}="${value}"; esperado conter "${expectedPart}"`)
+  }
+  console.log(`✓ ${path} — ${header}: ${value}`)
+}
+
 async function main() {
   try {
     await waitForServer()
     await assertPage('/termos', 'Termos de Uso')
     await assertPage('/privacidade', 'Política de Privacidade')
+    await assertPage('/institucional', 'Comece no seu ritmo')
+    await assertHeader('/robots.txt', 'content-type', 'text/plain')
+    await assertHeader('/robots.txt', 'cache-control', 's-maxage=3600')
+    await assertHeader('/sitemap.xml', 'content-type', 'application/xml')
+    await assertHeader('/sitemap.xml', 'cache-control', 's-maxage=3600')
   } finally {
     server.kill()
   }
