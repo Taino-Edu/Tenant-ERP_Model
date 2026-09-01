@@ -168,9 +168,16 @@ export default function MesaPage() {
       {/* Cabeçalho */}
       <div className="relative pt-10 pb-2 px-6 text-center">
         <h1 className="text-xl font-black text-white leading-none tracking-wide">{site.siteName}</h1>
-        <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
-          Seu Universo Geek Começa Aqui
-        </p>
+        {/* heroSubtitle, e não texto fixo: aqui estava cravado "Seu Universo Geek
+            Começa Aqui", slogan de UMA loja, exibido em TODAS. Um restaurante
+            mostrava o slogan de uma loja de card game na tela em que pede CPF do
+            cliente — além de errado, é o tipo de incoerência entre identidade e
+            conteúdo que classificador de phishing lê como página enganosa. */}
+        {site.heroSubtitle && (
+          <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
+            {site.heroSubtitle}
+          </p>
+        )}
         <p className="text-[11px] text-white/55 mt-2 font-medium">Mesa {mesa}</p>
       </div>
 
@@ -239,6 +246,25 @@ export default function MesaPage() {
               <p className="text-gray-400 text-sm mt-1">Preencha seus dados para abrir a comanda</p>
             </div>
 
+            {/* Quem está pedindo, para quê, e o que é opcional — VISÍVEL, sem
+                clique. Toda essa informação existia só dentro do modal de
+                privacidade, atrás de um botão.
+                Um formulário que pede CPF sem dizer na tela quem é o
+                responsável é exatamente o padrão que o Safe Browsing classifica
+                como engenharia social; a pessoa também chega aqui por QR Code,
+                sem ter digitado o endereço, e merece poder conferir onde está. */}
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 text-xs leading-relaxed text-gray-600">
+              <p>
+                Você está abrindo uma comanda em{' '}
+                <strong className="text-gray-900">{site.siteName}</strong>
+                {site.addressLine ? <>, {site.addressLine}</> : null}.
+              </p>
+              <p className="mt-1.5">
+                Os dados servem apenas para identificar você nesta comanda.
+                O CPF é opcional e pode ficar em branco.
+              </p>
+            </div>
+
             <div className="space-y-4">
 
               <div>
@@ -294,11 +320,16 @@ export default function MesaPage() {
                   type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
                   className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 text-[#28b0d6] focus:ring-[#28b0d6] shrink-0"
                 />
+                {/* Os dois links abriam o MESMO modal, que só tem política de
+                    privacidade. Prometer "Termos de Uso" e entregar outra coisa
+                    é promessa não cumprida na tela de consentimento — e é o tipo
+                    de detalhe que pesa contra numa avaliação de página enganosa.
+                    Termos apontam para /termos, que existe. */}
                 <span className="text-xs text-gray-500 leading-relaxed">
                   Li e concordo com os{' '}
-                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#28b0d6] font-semibold underline underline-offset-2">
+                  <a href="/termos" target="_blank" rel="noreferrer" className="text-[#28b0d6] font-semibold underline underline-offset-2">
                     Termos de Uso
-                  </button>
+                  </a>
                   {' '}e a{' '}
                   <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#28b0d6] font-semibold underline underline-offset-2">
                     Política de Privacidade
