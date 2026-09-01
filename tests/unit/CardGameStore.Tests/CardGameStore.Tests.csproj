@@ -16,7 +16,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.72" />
-    <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.30" />
     <!-- Referência explícita, na MESMA versão do EF Core do projeto principal.
          Sem ela, o Relational que chega aqui é o 8.0.11 exigido pelo provider
