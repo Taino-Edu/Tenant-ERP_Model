@@ -9,9 +9,20 @@ updates:
     groups:
       frontend-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # O Next resolve o compilador pelo pacote `typescript`; na major 7 ele não
+      # o encontra e aborta o lint antes de compilar qualquer coisa. Reabrir
+      # quando a versão do Next em uso declarar suporte.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
+  # Os dois projetos precisam subir no MESMO pull request. Atualizar só o
+  # principal deixa o de testes referenciando uma versão anterior do mesmo
+  # assembly, e o build falha com CS1705 antes de rodar um teste sequer.
   - package-ecosystem: nuget
-    directory: /CardGameStore
+    directories:
+      - /CardGameStore
+      - /tests/unit/CardGameStore.Tests
     schedule:
       interval: weekly
       day: monday
