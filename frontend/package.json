@@ -23,7 +23,7 @@
     "lucide-react": "^0.414.0",
     "next": "15.5.21",
     "qrcode": "^1.5.4",
-    "react": "^18.3.1",
+    "react": "^19.2.8",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
     "sharp": "^0.35.4"
@@ -33,7 +33,7 @@
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^22.1.0",
     "@types/qrcode": "^1.5.5",
-    "@types/react": "^18.3.3",
+    "@types/react": "^19.2.18",
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
