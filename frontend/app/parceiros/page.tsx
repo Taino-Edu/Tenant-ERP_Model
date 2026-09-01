@@ -26,6 +26,7 @@ import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
 import SystemShowcase from '@/components/institucional/SystemShowcase'
 import { CONTACTS, submitLead, useInstitucionalTheme } from '@/lib/institucional'
+import { trackMarketingEvent } from '@/lib/marketing'
 
 /**
  * Percentuais padrão da parceria.
@@ -177,6 +178,7 @@ export default function ParceirosPage() {
         { kind: 'Afiliados', defaultCampaign: 'afiliados' },
       )
       setSubmitted(true)
+      trackMarketingEvent('lead_submit', { form: 'parceiros', lead_kind: 'referral_partner' })
     } catch (submitError) {
       setError(getErrorMessage(submitError, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
     } finally {

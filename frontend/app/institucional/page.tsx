@@ -21,6 +21,8 @@ import SystemShowcase from '@/components/institucional/SystemShowcase'
 import Logo from '@/components/Logo'
 import { CONTACTS, ROOT_DOMAIN, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
 import type { ModuleDemoId } from '@/components/institucional/PlatformModuleDemo'
+import { trackMarketingEvent } from '@/lib/marketing'
+import { COOKIE_CONSENT_EVENT } from '@/lib/cookieConsent'
 
 const MARKETING_WHATSAPP = CONTACTS.marketingWhatsapp
 const PlatformModuleDemo = dynamic(() => import('@/components/institucional/PlatformModuleDemo'), { ssr: false })
@@ -79,6 +81,7 @@ export default function InstitucionalPage() {
     { role: 'assistant', text: 'Oi! Eu sou o Assistente Octus. Posso explicar os planos, recursos e o Programa Clientes Fundadores.' },
   ])
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const pricingTracked = useRef(false)
 
   useEffect(() => {
     publicDirectoryApi.listTenants().then(response => setTenants(response.data)).catch(() => {})
@@ -89,6 +92,29 @@ export default function InstitucionalPage() {
     // não vazio de um efeito como função de limpeza na próxima renderização.
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length, chatLoading])
+
+  useEffect(() => {
+    const pricing = document.getElementById('planos')
+    if (!pricing) return
+    const observer = new IntersectionObserver(entries => {
+      if (!pricingTracked.current && entries.some(entry => entry.isIntersecting)) {
+        pricingTracked.current = trackMarketingEvent('view_pricing', { page_path: window.location.pathname })
+        if (pricingTracked.current) observer.disconnect()
+      }
+    }, { threshold: 0, rootMargin: '0px 0px -40px 0px' })
+    observer.observe(pricing)
+    const reconsider = () => {
+      if (!pricingTracked.current) {
+        observer.unobserve(pricing)
+        observer.observe(pricing)
+      }
+    }
+    window.addEventListener(COOKIE_CONSENT_EVENT, reconsider)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener(COOKIE_CONSENT_EVENT, reconsider)
+    }
+  }, [])
 
   async function handleLeadSubmit(event: FormEvent) {
     event.preventDefault()
@@ -101,6 +127,7 @@ export default function InstitucionalPage() {
         privacyNoticeAcknowledged: privacyAcknowledged,
       })
       setLeadSubmitted(true)
+      trackMarketingEvent('lead_submit', { form: 'institucional', lead_kind: 'trial' })
     } catch (error) {
       setLeadError(getErrorMessage(error, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
     } finally {
@@ -285,7 +312,7 @@ export default function InstitucionalPage() {
                 ].map((item, index) => <li key={item} className="flex gap-4 text-slate-300"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-octus-600 text-xs font-black text-white">{index + 1}</span><span className="leading-7">{item}</span></li>)}
               </ol>
               <p className="mt-6 border-t border-white/10 pt-5 text-xs leading-6 text-slate-400">Visitas técnicas presenciais são destinadas à região metropolitana de São José do Rio Preto. Condições confirmadas com o Marketing.</p>
-              <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 font-extrabold text-[#071f3d] transition hover:bg-amber-200">Quero ser Cliente Fundador <ArrowRight size={18} /></a>
+              <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" onClick={() => trackMarketingEvent('whatsapp_click', { placement: 'founders' })} className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-5 py-3.5 font-extrabold text-[#071f3d] transition hover:bg-amber-200">Quero ser Cliente Fundador <ArrowRight size={18} /></a>
             </div>
           </div>
         </div>
@@ -348,7 +375,7 @@ export default function InstitucionalPage() {
                       informativo precisa. Daí o tom mais fechado no claro. */}
                   {plano.inclui.map(item => <li key={item} className={`flex gap-3 text-sm leading-6 ${plano.destaque ? 'text-slate-300' : theme.body}`}><Check size={18} className={`mt-0.5 shrink-0 ${plano.destaque ? 'text-octus-400' : 'octus-accent'}`} /><span>{item}</span></li>)}
                 </ul>
-                <a href="#contato" className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-extrabold transition ${plano.destaque ? 'bg-octus-600 text-white hover:bg-octus-500' : `border ${theme.outline}`}`}>Testar este plano <ArrowRight size={17} /></a>
+                <a href="#contato" onClick={() => trackMarketingEvent('select_plan', { plan: plano.nome })} className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-extrabold transition ${plano.destaque ? 'bg-octus-600 text-white hover:bg-octus-500' : `border ${theme.outline}`}`}>Testar este plano <ArrowRight size={17} /></a>
               </article>
             ))}
           </div>
@@ -365,7 +392,7 @@ export default function InstitucionalPage() {
               contador, marcado, não marcado, não marcado" sem dizer a que
               coluna cada marca pertence — e os ícones sozinhos não têm texto
               nenhum, daí o <span class="sr-only"> em cada célula. */}
-          <div className={`mt-12 overflow-x-auto rounded-2xl border ${theme.border}`}>
+          <div className={`relative mt-12 overflow-x-auto rounded-2xl border ${theme.border}`}>
             <table className="w-full min-w-[560px] border-collapse">
               <caption className="sr-only">
                 Comparativo entre o Octus, um ERP genérico e o uso de ferramentas separadas
@@ -433,7 +460,7 @@ export default function InstitucionalPage() {
             <p className="mt-5 text-lg leading-8 text-slate-300">Conte um pouco do seu negócio. A gente ajuda a escolher o plano e prepara a implantação sem empurrar recurso que você não precisa.</p>
             <div className="mt-8 space-y-3 text-sm text-slate-300">
               <a href={telHref(CONTACTS.supportPhone)} className="flex items-center gap-3 hover:text-white"><Headphones size={18} className="text-octus-400" />Suporte · {CONTACTS.supportPhone}</a>
-              <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-3 hover:text-white"><MessageCircle size={18} className="text-octus-400" />Marketing · {CONTACTS.marketingPhone}</a>
+              <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" onClick={() => trackMarketingEvent('whatsapp_click', { placement: 'contact' })} className="flex items-center gap-3 hover:text-white"><MessageCircle size={18} className="text-octus-400" />Marketing · {CONTACTS.marketingPhone}</a>
               <a href={telHref(CONTACTS.devPhone)} className="flex items-center gap-3 hover:text-white"><Layers3 size={18} className="text-octus-400" />Desenvolvimento · {CONTACTS.devPhone}</a>
               <a href={`mailto:${CONTACTS.email}`} className="flex items-center gap-3 hover:text-white"><Mail size={18} className="text-octus-400" />{CONTACTS.email}</a>
             </div>
