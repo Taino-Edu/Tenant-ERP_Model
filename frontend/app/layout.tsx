@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 // navegador e no snippet do Google pra cada loja. Fallback genérico
 // ("Octus") em qualquer falha — getTenantIconsForHost nunca lança.
 export async function generateMetadata(): Promise<Metadata> {
-  const host = headers().get('host')
+  const host = (await headers()).get('host')
   const icons = await getTenantIconsForHost(host)
 
   const iconUrl = icons?.faviconUrl

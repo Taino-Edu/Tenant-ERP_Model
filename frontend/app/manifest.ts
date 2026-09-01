@@ -13,7 +13,7 @@ import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
 // lugar, só não é mais referenciado — nada quebra se algo ainda apontar pra
 // ele direto por path).
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
-  const host = headers().get('host')
+  const host = (await headers()).get('host')
   const tenantIcons = await getTenantIconsForHost(host)
 
   const iconUrl = tenantIcons?.pwaIconUrl

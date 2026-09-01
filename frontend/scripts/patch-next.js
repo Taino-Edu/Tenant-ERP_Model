@@ -23,22 +23,27 @@ if (!fs.existsSync(nextBinPath)) {
 
 let content = fs.readFileSync(nextBinPath, 'utf8');
 
-// Verifica se o patch já foi aplicado
-if (content.includes('Promise.resolve(require("../cli/next-dev.js"))')) {
+// Verifica se o patch já foi aplicado (Next 14 usava aspas duplas; 15, simples).
+if (/Promise\.resolve\(require\(["']\.\.\/cli\/next-dev\.js["']\)\)/.test(content)) {
   console.log('[patch-next] Patch já aplicado. OK.');
   process.exit(0);
 }
 
 // Aplica o patch: substitui import() ESM por require() CJS para next-dev
-const original = 'import("../cli/next-dev.js").then((mod)=>mod.nextDev(options, portSource, directory))';
-const patched  = 'Promise.resolve(require("../cli/next-dev.js")).then((mod)=>mod.nextDev(options, portSource, directory))';
+const originals = [
+  'import("../cli/next-dev.js").then((mod)=>mod.nextDev(options, portSource, directory))',
+  "import('../cli/next-dev.js').then((mod)=>mod.nextDev(options, portSource, directory))",
+];
+const original = originals.find(candidate => content.includes(candidate));
 
-if (!content.includes(original)) {
+if (!original) {
   console.log('[patch-next] AVISO: Trecho original não encontrado. Versão do Next.js pode ter mudado.');
   console.log('[patch-next] Patch não aplicado.');
   process.exit(0);
 }
 
+const quote = original.includes("import('") ? "'" : '"';
+const patched = `Promise.resolve(require(${quote}../cli/next-dev.js${quote})).then((mod)=>mod.nextDev(options, portSource, directory))`;
 content = content.replace(original, patched);
 fs.writeFileSync(nextBinPath, content, 'utf8');
 console.log('[patch-next] Patch aplicado com sucesso! (import -> require para next-dev)');
