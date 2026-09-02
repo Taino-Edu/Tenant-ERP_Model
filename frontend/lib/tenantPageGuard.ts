@@ -24,9 +24,14 @@ export async function tenantPageStatus(
     if (response.status === 404 && data?.errorCode === 'tenant_unavailable') return 404
     if (response.ok && typeof data?.siteName === 'string' && data.siteName.trim()) return 200
   } catch {
-    // Sem detalhes internos no HTML ou cache negativo entre lojas.
+    // Disponibilidade primeiro: a API pode estar saudável para o navegador,
+    // mas indisponível pelo endereço interno do container. Sem uma confirmação
+    // explícita de negócio, nunca derrubar uma loja válida com falso 503.
+    return 200
   }
-  return 503
+  // Status genérico, proxy HTML ou JSON incompleto também não provam que a
+  // loja deixou de existir. Mantém o comportamento anterior até a API voltar.
+  return 200
 }
 
 export function tenantErrorResponse(status: 404 | 503, head = false): Response {
