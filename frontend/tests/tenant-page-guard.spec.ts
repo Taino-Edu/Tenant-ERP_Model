@@ -29,15 +29,15 @@ test('somente 404 explícito de loja ausente/inativa vira página não encontrad
 })
 
 for (const status of [403, 404, 429, 500, 502, 503]) {
-  test(`erro genérico ${status} não é tratado como loja inexistente`, async () => {
-    expect(await tenantPageStatus(shop, json({}, status))).toBe(503)
+  test(`erro genérico ${status} preserva a disponibilidade da loja`, async () => {
+    expect(await tenantPageStatus(shop, json({}, status))).toBe(200)
   })
 }
 
-test('timeout, JSON inválido e resposta incompleta são indisponibilidade temporária', async () => {
-  expect(await tenantPageStatus(shop, async () => { throw new Error('timeout') })).toBe(503)
-  expect(await tenantPageStatus(shop, async () => new Response('<html>proxy</html>'))).toBe(503)
-  expect(await tenantPageStatus(shop, json({}))).toBe(503)
+test('timeout, JSON inválido e resposta incompleta não derrubam loja válida', async () => {
+  expect(await tenantPageStatus(shop, async () => { throw new Error('timeout') })).toBe(200)
+  expect(await tenantPageStatus(shop, async () => new Response('<html>proxy</html>'))).toBe(200)
+  expect(await tenantPageStatus(shop, json({}))).toBe(200)
 })
 
 test('resultado de uma loja não vaza para outra nem fica em cache negativo', async () => {
