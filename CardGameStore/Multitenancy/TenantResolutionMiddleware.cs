@@ -44,6 +44,20 @@ public class TenantResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext, CatalogDbContext catalog)
     {
+        // Estes endpoints públicos resolvem o tenant pelo parâmetro `slug` no
+        // próprio controller. O SSR chama a API diretamente pela rede Docker,
+        // cujo Host é o nome do serviço (ex.: cardgamestore_api), e por isso não
+        // deve passar pela resolução/rejeição baseada em domínio. A exceção é
+        // deliberadamente exata: nenhuma outra rota pública ou autenticada ganha
+        // acesso por um Host desconhecido.
+        if (IsSlugResolvedPublicPath(context.Request.Path))
+        {
+            await SetTenantAndContinue(
+                context, tenantContext,
+                TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+            return;
+        }
+
         var host = context.Request.Host.Host;
         var slug = ExtractSlug(host, _rootDomain);
 
@@ -219,6 +233,10 @@ public class TenantResolutionMiddleware
         !string.IsNullOrWhiteSpace(rootDomain)
         && (host.Equals(rootDomain, StringComparison.OrdinalIgnoreCase)
             || host.Equals($"www.{rootDomain}", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsSlugResolvedPublicPath(PathString path) =>
+        path.Equals("/api/public/site-icons", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/public/product", StringComparison.OrdinalIgnoreCase);
 }
 
 public static class TenantResolutionMiddlewareExtensions
