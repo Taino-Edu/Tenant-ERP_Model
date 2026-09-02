@@ -404,13 +404,14 @@
 
 ### MKT-001 — Colocar a 3E Systen no Google
 
-- **Estado:** `BLOQUEADO` por verificação da conta Google/DNS.
+- **Estado:** `PARCIAL` em 01/09/2026: propriedade de domínio acessível; sitemap enviado e processado pelo Google com 6 URLs. Prioridade atual: investigar o alerta "Páginas enganosas" (sem URLs de amostra) e revisar indexação. Ver [checklist e evidências](../operacao/INDEXACAO-CHECKLIST.md).
 - **Diagnóstico em 2026-08-11:** `https://3esysten.com.br` e o sitemap respondem
   `200` inclusive para Googlebot; `robots.txt`, canonical, metadata, JSON-LD e
   `index, follow` estão corretos. A busca `site:3esysten.com.br` não retorna
   páginas e não existe TXT `google-site-verification` no DNS.
-- **Fazer:** criar propriedade de domínio no Search Console, adicionar o TXT no
-  Cloudflare, enviar `/sitemap.xml`, inspecionar a home e solicitar indexação.
+- **Fazer:** investigar o alerta de segurança e revisar URLs duplicadas/soft 404.
+  Propriedade acessível e envio do sitemap já confirmados; não recriar a propriedade
+  nem alterar DNS sem necessidade. Inspecionar a home antes de pedir nova indexação.
 - **Depois:** Bing Webmaster Tools/IndexNow e Perfil da Empresa no Google se a
   operação atender presencialmente ou em área de serviço.
 - **Critério de conclusão:** propriedade verificada, sitemap lido sem erro,

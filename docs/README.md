@@ -13,6 +13,7 @@ continuam em seus respectivos diretorios.
 - [Guia de testes](testes/GUIA-DE-TESTES.md)
 - [Status executivo](planejamento/STATUS.md)
 - [Backlog](planejamento/BACKLOG.md)
+- [Google: sitemap enviado, alerta de segurança e próximas etapas](operacao/INDEXACAO-CHECKLIST.md)
 - [Plano do MVP de Pedidos Online](planejamento/PLANO-MVP-PEDIDOS-ONLINE.md)
 
 ## Categorias
