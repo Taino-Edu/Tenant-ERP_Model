@@ -233,6 +233,53 @@ public class TenantResolutionMiddlewareTests
         tenantContext.IsExplicitlySet.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("/api/public/site-icons")]
+    [InlineData("/api/public/product")]
+    public async Task InvokeAsync_EndpointPublicoResolvidoPorSlug_PermiteHostInternoExato(string path)
+    {
+        await using var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("cardgamestore_api:5000", services);
+        ctx.Request.Path = path;
+        var nextChamado = false;
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br",
+            rejectUnknownHosts: true);
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        nextChamado.Should().BeTrue();
+        tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId);
+        tenantContext.IsExplicitlySet.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("/api/public")]
+    [InlineData("/api/public/tenants")]
+    [InlineData("/api/public/site-icons/extra")]
+    [InlineData("/api/site-config")]
+    public async Task InvokeAsync_OutraRotaComHostInterno_ContinuaBloqueada(string path)
+    {
+        await using var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("cardgamestore_api:5000", services);
+        ctx.Request.Path = path;
+        ctx.Response.Body = new MemoryStream();
+        var nextChamado = false;
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br",
+            rejectUnknownHosts: true);
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        nextChamado.Should().BeFalse();
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        tenantContext.IsExplicitlySet.Should().BeFalse();
+    }
+
     [Fact]
     public async Task InvokeAsync_TenantExterno_BloqueiaPainelQueExigiriaSchemaLocal()
     {
