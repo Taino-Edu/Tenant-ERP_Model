@@ -110,6 +110,8 @@ publish/
 
 # Logs e resultados de testes locais
 *.txt
+!frontend/app/.well-known/security.txt/
+!frontend/app/.well-known/security.txt/route.ts
 !GUIA-DE-TESTES.txt
 PUSH-GITHUB.bat
 

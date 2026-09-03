@@ -57,6 +57,24 @@ async function assertHeader(path, header, expectedPart) {
   console.log(`✓ ${path} — ${header}: ${value}`)
 }
 
+async function assertSecurityTxt() {
+  const response = await fetchWithTimeout('/.well-known/security.txt')
+  const body = await response.text()
+  const requiredFields = [
+    'Contact: mailto:3esysten@gmail.com',
+    'Expires: 2027-03-01T00:00:00Z',
+    'Canonical: https://3esysten.com.br/.well-known/security.txt',
+  ]
+  if (
+    !response.ok
+    || !response.headers.get('content-type')?.includes('text/plain')
+    || requiredFields.some(field => !body.includes(field))
+  ) {
+    throw new Error(`security.txt inválido: HTTP ${response.status}; body=${JSON.stringify(body)}`)
+  }
+  console.log(`✓ /.well-known/security.txt — RFC 9116 básico válido`)
+}
+
 async function main() {
   try {
     await waitForServer()
@@ -67,6 +85,7 @@ async function main() {
     await assertHeader('/robots.txt', 'cache-control', 's-maxage=3600')
     await assertHeader('/sitemap.xml', 'content-type', 'application/xml')
     await assertHeader('/sitemap.xml', 'cache-control', 's-maxage=3600')
+    await assertSecurityTxt()
   } finally {
     server.kill()
   }
