@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { leadsApi, type LeadKind } from '@/lib/api'
+import { getErrorMessage, leadsApi, type LeadKind } from '@/lib/api'
 
 export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
@@ -150,4 +150,22 @@ export async function submitLead(
     referrerUrl: document.referrer.slice(0, 500) || undefined,
     landingPage: window.location.href.slice(0, 500),
   })
+}
+
+/**
+ * Mensagem de erro para os formulários PÚBLICOS.
+ *
+ * `getErrorMessage` repassa o texto de validação do servidor, o que é certo no
+ * painel — lá quem lê é operador e o texto diz qual campo corrigir. No site é o
+ * oposto: nome, WhatsApp e a ciência do aviso já são obrigatórios no HTML, então
+ * um 400 significa que o CONTRATO quebrou, não que o visitante errou algo. Foi
+ * assim que a landing chegou a exibir "The JSON value could not be converted to
+ * CardGameStore.DTOs.LeadKind" embaixo do botão de teste grátis.
+ *
+ * O 429 fica de fora da regra porque ali o texto do servidor diz a única coisa
+ * que a pessoa pode fazer: quanto tempo esperar.
+ */
+export function publicFormErrorMessage(error: unknown, fallback: string): string {
+  const status = (error as { response?: { status?: number } })?.response?.status
+  return status === 429 ? getErrorMessage(error, fallback) : fallback
 }

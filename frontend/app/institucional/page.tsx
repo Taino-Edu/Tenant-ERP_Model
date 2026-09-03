@@ -11,7 +11,7 @@ import {
   UtensilsCrossed, X,
 } from 'lucide-react'
 import {
-  getErrorMessage, publicAssistantApi, publicDirectoryApi,
+  publicAssistantApi, publicDirectoryApi,
   type PublicTenantDto,
 } from '@/lib/api'
 import { PLANOS } from '@/lib/planos'
@@ -19,7 +19,7 @@ import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
 import SystemShowcase from '@/components/institucional/SystemShowcase'
 import Logo from '@/components/Logo'
-import { CONTACTS, ROOT_DOMAIN, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
+import { CONTACTS, ROOT_DOMAIN, publicFormErrorMessage, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
 import type { ModuleDemoId } from '@/components/institucional/PlatformModuleDemo'
 import { trackMarketingEvent } from '@/lib/marketing'
 import { COOKIE_CONSENT_EVENT } from '@/lib/cookieConsent'
@@ -129,7 +129,7 @@ export default function InstitucionalPage() {
       setLeadSubmitted(true)
       trackMarketingEvent('lead_submit', { form: 'institucional', lead_kind: 'trial' })
     } catch (error) {
-      setLeadError(getErrorMessage(error, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
+      setLeadError(publicFormErrorMessage(error, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
     } finally {
       setLeadSubmitting(false)
     }

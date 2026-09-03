@@ -4,6 +4,7 @@
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace CardGameStore.DTOs;
 
@@ -20,7 +21,14 @@ namespace CardGameStore.DTOs;
 /// É um enum e não o `Campaign` (texto livre vindo do cliente) porque o texto
 /// jurídico é derivado no servidor: campanha serve para marketing, não para
 /// escolher a descrição da base legal.
+///
+/// O conversor de string é obrigatório, não estilo: a API não registra
+/// JsonStringEnumConverter global, então sem ele o System.Text.Json só aceita o
+/// número do enum e devolve 400 ("The JSON value could not be converted to
+/// LeadKind") para o `"kind":"Institucional"` que os dois formulários do site
+/// mandam — ou seja, o CTA da landing inteiro parava de captar lead.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LeadKind
 {
     Institucional,

@@ -20,12 +20,11 @@ import {
   FileSignature, HandCoins, Handshake, Loader2, MessageCircle, Repeat,
   ShieldCheck, UserPlus, Wallet,
 } from 'lucide-react'
-import { getErrorMessage } from '@/lib/api'
 import { PLANOS, formatarReais, formatarReaisExato } from '@/lib/planos'
 import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
 import SystemShowcase from '@/components/institucional/SystemShowcase'
-import { CONTACTS, submitLead, useInstitucionalTheme } from '@/lib/institucional'
+import { CONTACTS, publicFormErrorMessage, submitLead, useInstitucionalTheme } from '@/lib/institucional'
 import { trackMarketingEvent } from '@/lib/marketing'
 
 /**
@@ -180,7 +179,7 @@ export default function ParceirosPage() {
       setSubmitted(true)
       trackMarketingEvent('lead_submit', { form: 'parceiros', lead_kind: 'referral_partner' })
     } catch (submitError) {
-      setError(getErrorMessage(submitError, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
+      setError(publicFormErrorMessage(submitError, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
     } finally {
       setSubmitting(false)
     }
