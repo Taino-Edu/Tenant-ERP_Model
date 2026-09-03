@@ -35,6 +35,42 @@ const STATUS_STYLES: Record<LeadStatus, string> = {
 
 type CrmView = 'list' | 'kanban' | 'tasks' | 'analytics'
 type TaskFilter = 'all' | 'overdue' | 'today' | 'future'
+type OrigemFilter = '' | 'site' | 'prospeccao'
+
+/** Valor de `origem` que o POST público grava (LeadsController). Os dois
+ * formulários do site — institucional e Programa de Afiliados — caem aqui;
+ * a Prospecção grava "prospeccao". */
+const ORIGEM_SITE = 'landing'
+
+/** Prazo de resposta para quem escreveu no site. Não é SLA contratado: é o
+ * ponto em que a página passa a cobrar, porque um contato que a pessoa mandou
+ * por vontade própria e ficou um dia inteiro parado em "Novo" já é um cliente
+ * perdido — diferente do lead de prospecção, que ninguém pediu. */
+const HORAS_PARA_RESPONDER = 24
+
+/** Quem chegou pelo formulário do site (esperando retorno) × quem a Prospecção
+ * garimpou. A distinção é o que separa "atrasado" de "fila de trabalho". */
+function veioDoSite(lead: LeadDto): boolean {
+  return lead.origem === ORIGEM_SITE
+}
+
+function horasDesde(iso: string): number {
+  return (Date.now() - new Date(iso).getTime()) / 3_600_000
+}
+
+/** Contato do site que ninguém respondeu ainda. `canContact` entra na conta
+ * porque quem se opôs ao tratamento não pode ser cobrado de volta — cobrar
+ * resposta ali seria empurrar o time para uma ligação que a LGPD barra. */
+function aguardandoResposta(lead: LeadDto): boolean {
+  return veioDoSite(lead) && lead.status === 'Novo' && lead.canContact
+}
+
+function esperaHumana(horas: number): string {
+  if (horas < 1) return 'menos de 1h'
+  if (horas < 24) return `${Math.floor(horas)}h`
+  const dias = Math.floor(horas / 24)
+  return dias === 1 ? '1 dia' : `${dias} dias`
+}
 
 const KANBAN_STAGES: { value: CrmOpportunityStage | null; label: string; probability: number; color: string }[] = [
   { value: null, label: 'Sem oportunidade', probability: 20, color: 'border-gray-600' },
@@ -182,9 +218,27 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row', podeEd
   const wQualif = card ? 'w-full' : 'w-36'
   const wNotas  = card ? 'w-full' : 'w-64'
 
+  // Espera só existe para quem veio do site: a linha precisa dizer, sem abrir
+  // nada, se este contato está pendurado esperando alguém responder.
+  const esperando = aguardandoResposta(lead)
+  const horasEsperando = esperando ? horasDesde(lead.createdAt) : 0
+  const atrasado = horasEsperando >= HORAS_PARA_RESPONDER
+
   const contato = (
     <>
-      <p className="text-white font-medium">{lead.nome}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-white font-medium">{lead.nome}</p>
+        <span className={clsx('rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+          veioDoSite(lead) ? 'border-brand-500/30 bg-brand-500/10 text-brand-300' : 'border-surface-600 bg-surface-700 text-gray-400')}>
+          {veioDoSite(lead) ? 'Do site' : 'Prospecção'}
+        </span>
+        {esperando && (
+          <span className={clsx('flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold',
+            atrasado ? 'border-red-500/40 bg-red-500/10 text-red-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-300')}>
+            <AlertTriangle className="h-3 w-3" />Sem resposta há {esperaHumana(horasEsperando)}
+          </span>
+        )}
+      </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 mt-0.5">
         {lead.telefone ? (
           <a
@@ -344,6 +398,7 @@ export default function PlataformaLeadsPage() {
   const [leads, setLeads] = useState<LeadDto[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('')
+  const [origemFilter, setOrigemFilter] = useState<OrigemFilter>('')
   const [search, setSearch] = useState('')
   const [convertingLead, setConvertingLead] = useState<LeadDto | null>(null)
   const [crmLead, setCrmLead] = useState<LeadDto | null>(null)
@@ -374,9 +429,17 @@ export default function PlataformaLeadsPage() {
 
   const refreshAll = useCallback(() => { fetchLeads(); fetchCrmMeta() }, [fetchCrmMeta, fetchLeads])
 
+  // A origem filtra ANTES dos contadores por status: com "Do site" ligado, o
+  // "Novo 21" tem que contar leads do site, senão o número da aba discorda da
+  // lista que ele abre.
+  const leadsPorOrigem = useMemo(
+    () => leads.filter(lead => !origemFilter || veioDoSite(lead) === (origemFilter === 'site')),
+    [leads, origemFilter],
+  )
+
   const filteredLeads = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR')
-    return leads.filter(lead => {
+    return leadsPorOrigem.filter(lead => {
       const matchesStatus = !statusFilter || lead.status === statusFilter
       const matchesOwner = !ownerFilter || (ownerFilter === 'unassigned'
         ? !lead.opportunity?.assignedUserId
@@ -385,11 +448,28 @@ export default function PlataformaLeadsPage() {
         .some(value => value?.toLocaleLowerCase('pt-BR').includes(term))
       return matchesStatus && matchesOwner && matchesSearch
     })
-  }, [leads, ownerFilter, search, statusFilter])
+  }, [leadsPorOrigem, ownerFilter, search, statusFilter])
 
   const stageCounts = useMemo(() => Object.fromEntries(
-    STATUS_OPTIONS.map(status => [status, leads.filter(lead => lead.status === status).length])
-  ) as Record<LeadStatus, number>, [leads])
+    STATUS_OPTIONS.map(status => [status, leadsPorOrigem.filter(lead => lead.status === status).length])
+  ) as Record<LeadStatus, number>, [leadsPorOrigem])
+
+  // O aviso olha a base inteira, não a filtrada: quem está com um filtro
+  // qualquer ligado é justamente quem corre o risco de não ver o contato novo.
+  const semResposta = useMemo(() => leads.filter(aguardandoResposta), [leads])
+  const esperaMaisLonga = useMemo(
+    () => semResposta.reduce((maior, lead) => Math.max(maior, horasDesde(lead.createdAt)), 0),
+    [semResposta],
+  )
+  const respostasAtrasadas = esperaMaisLonga >= HORAS_PARA_RESPONDER
+
+  function mostrarSemResposta() {
+    setView('list')
+    setOrigemFilter('site')
+    setStatusFilter('Novo')
+    setOwnerFilter('')
+    setSearch('')
+  }
 
   const todayStart = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date }, [])
   const tomorrowStart = useMemo(() => new Date(todayStart.getTime() + 86_400_000), [todayStart])
@@ -460,6 +540,34 @@ export default function PlataformaLeadsPage() {
 
       {!podeEditar && <SomenteLeitura>Você acompanha o funil, a base legal de cada lead e a linha do tempo. Editar, enriquecer, converter e as ações de LGPD ficam com o comercial.</SomenteLeitura>}
 
+      {/* Aviso, não métrica: o contato que a pessoa mandou pelo site é o único
+          da tela em que o silêncio é falha nossa. Fica acima dos cartões e leva
+          direto para a lista filtrada — ler o número sem conseguir agir nele
+          seria só mais um contador. */}
+      {semResposta.length > 0 && (
+        <button
+          type="button"
+          onClick={mostrarSemResposta}
+          className={clsx('card flex w-full items-center gap-3 border p-4 text-left transition hover:brightness-110',
+            respostasAtrasadas ? 'border-red-500/40 bg-red-500/5' : 'border-amber-500/40 bg-amber-500/5')}
+        >
+          <AlertTriangle className={clsx('h-5 w-5 shrink-0', respostasAtrasadas ? 'text-red-400' : 'text-amber-400')} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-white">
+              {semResposta.length === 1
+                ? '1 contato do site esperando resposta'
+                : `${semResposta.length} contatos do site esperando resposta`}
+            </p>
+            <p className="text-xs text-gray-400">
+              O mais antigo há {esperaHumana(esperaMaisLonga)}
+              {respostasAtrasadas && ` · acima do prazo de ${HORAS_PARA_RESPONDER}h`}
+              {' '}· essas pessoas pediram contato pelo formulário.
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-bold text-brand-300">Ver só esses</span>
+        </button>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Leads captados', value: leads.length, icon: Users, color: 'text-brand-300' },
@@ -500,9 +608,14 @@ export default function PlataformaLeadsPage() {
           <option value="">Todos os responsáveis</option><option value="unassigned">Sem responsável</option>
           {assignees.map(owner => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
         </select>
+        <select className="input min-w-48 text-sm" aria-label="Origem do lead" value={origemFilter} onChange={event => setOrigemFilter(event.target.value as OrigemFilter)}>
+          <option value="">Todas as origens</option>
+          <option value="site">Do site (formulário)</option>
+          <option value="prospeccao">Prospecção</option>
+        </select>
         {view === 'list' && <div className="flex gap-1 overflow-x-auto">
           <button type="button" onClick={() => setStatusFilter('')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${!statusFilter ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300'}`}>
-            Todos {leads.length}
+            Todos {leadsPorOrigem.length}
           </button>
           {STATUS_OPTIONS.map(status => (
             <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${statusFilter === status ? STATUS_STYLES[status] : 'text-gray-500 hover:text-gray-300'}`}>
