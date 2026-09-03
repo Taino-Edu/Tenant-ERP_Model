@@ -18,9 +18,21 @@ Mudanças de consentimento em outras abas também são observadas.
 Preencha no `.env` canônico de produção e refaça o build do frontend:
 
 ```env
-GTM_ID=GTM-XXXXXXX
+GTM_ID=GTM-KB3S5LZ8
 META_PIXEL_ID=123456789012345
 GOOGLE_SITE_VERIFICATION=
+```
+
+O `.env` que vale é o de `/opt/tenant-erp/` — o `deploy/.env` é cópia que o
+`update.sh` sobrescreve. E "refaça o build" é literal: estas três entram como
+build-arg no Dockerfile do frontend e ficam congeladas na imagem, então editar o
+`.env` e reiniciar o container não muda nada. Para auditar o que está no ar sem
+acessar o servidor, procure o valor no bundle publicado:
+
+```bash
+curl -s https://3esysten.com.br/institucional \
+  | grep -o '/_next/static/chunks/app/layout-[^"]*'
+curl -s "https://3esysten.com.br<chunk>" | grep -o 'GTM-[A-Z0-9]*'
 ```
 
 - `GTM_ID`: contêiner usado como ponto único para GA4 e Google Ads.
@@ -54,10 +66,39 @@ bastam para bloquear todo envio sem consentimento**: configure checks adicionais
 por categoria e valide cada tag, inclusive Custom HTML. Analytics-only pode
 carregar o contêiner; nenhuma tag de anúncios deve disparar nesse cenário.
 
-Desative pageview automático e gatilhos de histórico/All Pages quando usar
-`octus_page_view`, para não duplicar medição ou observar rotas privadas durante
-transições. O evento Meta é um único `PageView`, não outro evento customizado
-com o mesmo significado. Não instale o Pixel também pelo GTM.
+O evento Meta é um único `PageView`, não outro evento customizado com o mesmo
+significado. Não instale o Pixel também pelo GTM.
+
+## Pageview: as duas montagens possíveis (não misture)
+
+A Tag do Google manda um `page_view` sozinha quando carrega, e **só na primeira
+vez**. Disparar a tag de configuração no evento personalizado `octus_page_view`
+achando que sai um pageview por navegação NÃO funciona: a segunda vez que ela
+dispara não gera hit nenhum, e as trocas de rota client-side entre
+`/institucional` e `/parceiros` somem do relatório sem nenhum erro visível.
+
+**Montagem A — a que está em produção (3E Systen, GTM-KB3S5LZ8 / G-L1R4P5T84J).**
+Uma tag só: Tag do Google no acionador nativo `Initialization - All Pages`, sem
+parâmetro extra. Mede um pageview por carregamento real de página. Não conta as
+navegações internas do SPA. Zero configuração, zero risco de contagem dupla.
+`Initialization - All Pages` é seguro aqui porque quem decide onde o contêiner
+existe é o app (`isMarketingPage` + consentimento): ele nunca é carregado em
+painel, login ou loja de tenant, então "All Pages" já significa "só as três
+páginas comerciais".
+
+**Montagem B — cobre também a navegação client-side.** Na tag de configuração,
+em *Definições de configuração*, adicione o parâmetro `send_page_view` = `false`;
+depois crie uma segunda tag, **Google Analytics: evento do GA4**, com nome de
+evento `page_view` e acionador de evento personalizado `octus_page_view`.
+
+Fazer metade de uma e metade da outra é o único jeito de errar: a tag de evento
+`page_view` sem o `send_page_view=false` conta cada visita duas vezes; o
+`send_page_view=false` sem a tag de evento zera a medição de pageview.
+
+Em qualquer das duas, marque em cada tag *Configurações de permissão* →
+**Exigir consentimento adicional** → `analytics_storage`. Sem isso a Tag do
+Google entra em modo negado e ainda envia ping sem cookie — o roteiro de
+validação abaixo exige silêncio total.
 
 O emissor aceita apenas valores conhecidos de `page_path`, `form`, `lead_kind`,
 `placement` e `plan`. Campos livres, URLs completas, parâmetros de busca,
