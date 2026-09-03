@@ -437,14 +437,16 @@ export default function InstitucionalPage() {
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-extrabold uppercase tracking-[0.2em] octus-accent">Quem já usa</p><h2 className={`mt-4 text-3xl font-black ${theme.heading}`}>Negócios reais, com identidade própria.</h2></div><a href="#contato" className="inline-flex items-center gap-2 font-bold octus-accent">Quero aparecer aqui <ArrowRight size={17} /></a></div>
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {tenants.map(tenant => (
-              <a key={tenant.slug} href={ROOT_DOMAIN ? `https://${tenant.slug}.${ROOT_DOMAIN}` : '#'} target="_blank" rel="noreferrer" className={`flex items-center gap-4 rounded-2xl border p-6 transition ${theme.card}`}>
+              <a key={tenant.slug} href={ROOT_DOMAIN ? `https://${tenant.slug}.${ROOT_DOMAIN}` : '#'} target="_blank" rel="noreferrer" className={`group flex min-h-28 items-center gap-5 rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-lg sm:p-6 ${theme.card}`}>
                 {/* `width`/`height` reservam a caixa antes do download: a
                     vitrine carrega depois do primeiro render, e sem as medidas
                     cada logo que chega empurra o card para baixo. `loading` e
                     `decoding` tiram essas imagens do caminho crítico — elas
                     ficam bem abaixo da dobra. */}
-                {tenant.logoUrl ? <img src={tenant.logoUrl} alt={`Logo ${tenant.displayName}`} width={56} height={56} loading="lazy" decoding="async" className="h-14 w-14 shrink-0 rounded-xl object-cover" /> : <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-octus-600 font-black text-white">{tenant.displayName.slice(0, 2).toUpperCase()}</span>}
-                <span><strong className={`block ${theme.heading}`}>{tenant.displayName}</strong><span className={`mt-1 block text-sm ${theme.muted}`}>{tenant.slug}.{ROOT_DOMAIN}</span></span><ExternalLink size={16} className="ml-auto octus-accent" />
+                <span className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border bg-white p-2 shadow-sm ${theme.border}`}>
+                  <img src={tenant.logoUrl!} alt={`Logo ${tenant.displayName}`} width={64} height={64} loading="lazy" decoding="async" className="h-full w-full object-contain" />
+                </span>
+                <span className="min-w-0"><strong className={`block truncate text-base ${theme.heading}`}>{tenant.displayName}</strong><span className={`mt-1 block truncate text-sm ${theme.muted}`}>{tenant.slug}.{ROOT_DOMAIN}</span></span><span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full octus-accent transition group-hover:bg-octus-600 group-hover:text-white"><ExternalLink size={16} /></span>
               </a>
             ))}
             {tenants.length === 0 && <div className={`rounded-2xl border border-dashed p-7 ${theme.border}`}><Building2 className="octus-accent" /><p className={`mt-4 font-extrabold ${theme.heading}`}>Sua empresa pode ser a próxima</p><p className={`mt-2 text-sm ${theme.muted}`}>A vitrine cresce junto com os clientes do Octus.</p></div>}

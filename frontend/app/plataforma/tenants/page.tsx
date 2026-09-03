@@ -13,7 +13,7 @@ import Spinner from '@/components/admin/ui/Spinner'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle } from 'lucide-react'
+import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle, Store, EyeOff } from 'lucide-react'
 import clsx from 'clsx'
 import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao } from '@/lib/planos'
 
@@ -179,6 +179,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   const [planName, setPlanName]   = useState(tenant.planName)
   const [savingBilling, setSavingBilling] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [updatingListing, setUpdatingListing] = useState(false)
   const [impersonating, setImpersonating] = useState(false)
   const [backingUp, setBackingUp] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -264,6 +265,19 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       toast.error(getErrorMessage(err, 'Erro ao atualizar status do tenant.'))
     } finally {
       setUpdatingStatus(false)
+    }
+  }
+
+  async function togglePublicListing() {
+    setUpdatingListing(true)
+    try {
+      await platformApi.updateTenantPublicListing(tenant.id, !tenant.isPubliclyListed)
+      toast.success(tenant.isPubliclyListed ? 'Loja removida da vitrine.' : 'Loja autorizada na vitrine.')
+      onChanged()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar a vitrine do tenant.'))
+    } finally {
+      setUpdatingListing(false)
     }
   }
 
@@ -438,6 +452,18 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
         className={clsx(BTN_ACAO, 'border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed')}
       >
         {impersonating ? <Spinner size="sm" /> : <LogIn className="w-3.5 h-3.5" />}
+      </button>}
+      {acoesPermitidas.gerenciar && <button
+        onClick={togglePublicListing}
+        disabled={updatingListing}
+        title={tenant.isPubliclyListed ? 'Remover da vitrine de clientes' : 'Autorizar na vitrine de clientes'}
+        aria-label={tenant.isPubliclyListed ? 'Remover da vitrine de clientes' : 'Autorizar na vitrine de clientes'}
+        className={clsx(BTN_ACAO, 'border-surface-500',
+          tenant.isPubliclyListed ? 'bg-brand-600/10 text-brand-300 hover:border-brand-400' : 'text-gray-500 hover:border-surface-400 hover:text-white')}
+      >
+        {updatingListing ? <Spinner size="sm" /> : tenant.isPubliclyListed
+          ? <Store className="w-3.5 h-3.5" />
+          : <EyeOff className="w-3.5 h-3.5 opacity-60" />}
       </button>}
       {acoesPermitidas.gerenciar && <button
         onClick={toggleStatus}

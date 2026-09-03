@@ -99,6 +99,13 @@ public class Tenant
     [Column("logo_url")]
     public string? LogoUrl { get; set; }
 
+    /// <summary>Autoriza a exibição da loja na vitrine pública do site institucional.
+    /// Opt-in: tenants novos e existentes ficam ocultos até uma escolha explícita da
+    /// plataforma. A vitrine também exige uma logo configurada, para nunca publicar
+    /// um card provisório com iniciais no lugar da identidade escolhida pelo cliente.</summary>
+    [Column("is_publicly_listed")]
+    public bool IsPubliclyListed { get; set; }
+
     /// <summary>Domínio próprio do lojista (ex: "minhaloja.com.br"), sempre em minúsculas,
     /// sem esquema/porta/path. Null = só o subdomínio de <c>Slug</c> funciona. TLS não é
     /// automatizado pra domínio próprio — o lojista precisa colocar o domínio dele atrás da

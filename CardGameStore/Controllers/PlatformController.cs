@@ -74,6 +74,7 @@ public class PlatformController : ControllerBase
         EnabledModules = t.EnabledModules,
         CustomDomain   = t.CustomDomain,
         MaxUsers       = t.MaxUsers,
+        IsPubliclyListed = t.IsPubliclyListed,
         MonthlyPrice    = t.MonthlyPrice,
         SetupFee        = t.SetupFee,
         BillingStartsOn = t.BillingStartsOn,
@@ -108,7 +109,7 @@ public class PlatformController : ControllerBase
 
             var tenant = await _provisioning.ProvisionAsync(
                 request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules,
-                request.PlanName, request.MaxUsers, kind);
+                request.PlanName, request.MaxUsers, kind, request.IsPubliclyListed);
             return CreatedAtAction(nameof(ListTenants), ToDto(tenant));
         }
         catch (InvalidOperationException ex)
@@ -139,6 +140,21 @@ public class PlatformController : ControllerBase
         if (tenant is null) return NotFound();
 
         tenant.Status = status;
+        await _catalog.SaveChangesAsync();
+
+        return Ok(ToDto(tenant));
+    }
+
+    /// <summary>Define se a loja pode aparecer na vitrine institucional. Mesmo
+    /// autorizada, ela só é publicada depois que sua logo estiver configurada.</summary>
+    [HttpPatch("tenants/{id:guid}/public-listing")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
+    public async Task<IActionResult> UpdatePublicListing(Guid id, [FromBody] UpdateTenantPublicListingRequest request)
+    {
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        tenant.IsPubliclyListed = request.IsPubliclyListed;
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));

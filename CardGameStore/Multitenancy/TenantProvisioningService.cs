@@ -91,12 +91,13 @@ public class TenantProvisioningService : ITenantProvisioningService
 
     public async Task<Tenant> ProvisionAsync(
         string slug, string? adminEmail, string? adminPassword, string[]? enabledModules = null,
-        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native)
+        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native,
+        bool isPubliclyListed = false)
     {
         await _provisionLock.WaitAsync();
         try
         {
-            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers, kind);
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers, kind, isPubliclyListed);
         }
         finally
         {
@@ -106,7 +107,7 @@ public class TenantProvisioningService : ITenantProvisioningService
 
     private async Task<Tenant> ProvisionLockedAsync(
         string slug, string? adminEmail, string? adminPassword, string[]? enabledModules,
-        string? planName, int? maxUsers, TenantKind kind)
+        string? planName, int? maxUsers, TenantKind kind, bool isPubliclyListed)
     {
         slug = slug.Trim().ToLowerInvariant();
 
@@ -160,6 +161,7 @@ public class TenantProvisioningService : ITenantProvisioningService
             SchemaName = schemaName,
             Status     = TenantStatus.Active,
             Kind       = kind,
+            IsPubliclyListed = isPubliclyListed,
         };
         // Só sobrescreve o default (["fiscal"]) se o chamador passou módulos —
         // preserva o comportamento de antes desse parâmetro existir.
