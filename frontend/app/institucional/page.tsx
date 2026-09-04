@@ -7,7 +7,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import {
   ArrowRight, BarChart3, Boxes, Building2, Calculator, Check,
   CheckCircle2, ChevronDown, ExternalLink, FileCheck2, HandCoins, Headphones,
-  Layers3, Loader2, Mail, MessageCircle, ReceiptText, Send, Smartphone,
+  Layers3, Loader2, Mail, MessageCircle, PlayCircle, ReceiptText, Send, Smartphone,
   UtensilsCrossed, X,
 } from 'lucide-react'
 import {
@@ -162,7 +162,11 @@ export default function InstitucionalPage() {
     <main className={`min-h-screen overflow-x-hidden ${theme.page}`}>
       <SiteHeader theme={theme} isDark={isDark} onToggleTheme={toggleTheme} />
 
-      <section id="conteudo" className={`relative isolate min-h-[690px] scroll-mt-24 overflow-hidden border-b ${theme.border}`}>
+      {/* A altura mínima de 690px era aplicada também no celular, onde a tela
+          inteira tem 812px: sobrava tão pouco que os CTAs caíam na faixa do
+          banner de cookies. Medido em 375x812, o botão principal ia até 599 com
+          o banner começando em 556. No sm pra cima a altura generosa fica. */}
+      <section id="conteudo" className={`relative isolate min-h-[560px] scroll-mt-24 overflow-hidden border-b sm:min-h-[690px] ${theme.border}`}>
         <Image
           src="/institutional/octus-hero-waves.png"
           alt=""
@@ -200,28 +204,74 @@ export default function InstitucionalPage() {
               : 'bg-gradient-to-r from-white via-white/90 to-white/40 sm:to-transparent'
           }`}
         />
-        <div className="mx-auto flex min-h-[690px] max-w-7xl items-center px-5 py-20 lg:px-8">
+        <div className="mx-auto flex min-h-[560px] max-w-7xl items-center px-5 py-12 sm:min-h-[690px] sm:py-20 lg:px-8">
           <div className="max-w-3xl">
+            {/* Prova social ANTES da promessa: quem chega sem conhecer a marca
+                decide em segundos se vale ler o resto, e a lista de clientes
+                estava enterrada lá embaixo na seção #clientes.
+
+                Sai da mesma consulta que alimenta a vitrine, então mostra o
+                número REAL de lojas e some sozinha enquanto não houver nenhuma
+                publicável — nada de "+15.000 clientes" inventado, e nada de
+                caixa vazia ocupando o topo. Quando os lojistas cadastrarem o
+                logo, a prova aparece aqui sem ninguém precisar editar o site. */}
+            {tenants.length > 0 && (
+              <div className="mb-6 flex items-center gap-3">
+                <div className="flex -space-x-2">
+                  {tenants.slice(0, 5).map(t => (
+                    <img
+                      key={t.slug}
+                      src={t.logoUrl!}
+                      alt={`Logo ${t.displayName}`}
+                      width={32}
+                      height={32}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-8 w-8 rounded-full border-2 border-white bg-white object-contain shadow-sm"
+                    />
+                  ))}
+                </div>
+                <span className={`text-sm font-bold ${theme.body}`}>
+                  {tenants.length === 1
+                    ? '1 loja já vende com a marca própria no Octus'
+                    : `${tenants.length} lojas já vendem com a marca própria no Octus`}
+                </span>
+              </div>
+            )}
             <p className="mb-5 text-sm font-extrabold uppercase tracking-[0.22em] octus-accent">Octus · gestão que veste a sua marca</p>
-            <h1 className={`text-5xl font-black leading-[1.02] tracking-[-0.045em] sm:text-6xl lg:text-7xl ${theme.heading}`}>
-              Tudo o que seu negócio precisa, <span className="octus-accent">numa tela só.</span>
+            {/* A headline anterior ("Tudo o que seu negócio precisa, numa tela
+                só") descrevia o produto. Esta nomeia o alívio que o lojista
+                procura — fechar o mês sem descobrir o prejuízo depois — e junta
+                o diferencial da plataforma, que é a marca dele na frente. */}
+            {/* text-4xl no celular: em 375px a headline ocupava quatro linhas em
+                text-5xl e empurrava os dois CTAs pra fora da primeira tela —
+                sozinha, antes mesmo do banner de cookies entrar. Do sm pra cima
+                nada muda, que é onde a tipografia grande tem espaço pra impor. */}
+            <h1 className={`text-4xl font-black leading-[1.04] tracking-[-0.045em] sm:text-6xl sm:leading-[1.02] lg:text-7xl ${theme.heading}`}>
+              Feche o mês sem susto, <span className="octus-accent">com a sua marca na frente.</span>
             </h1>
-            <p className={`mt-7 max-w-2xl text-lg leading-8 sm:text-xl ${theme.body}`}>
-              PDV, estoque, fiscal, crediário, financeiro e app próprio em um ERP claro, rápido e personalizável para o varejo e restaurantes.
+            <p className={`mt-5 max-w-2xl text-lg leading-8 sm:mt-7 sm:text-xl ${theme.body}`}>
+              PDV, estoque, fiscal, crediário e financeiro conectados: a venda vira nota e caixa no mesmo movimento, num ERP com o nome, as cores e o domínio da sua empresa.
             </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row">
               <a href="#contato" className="inline-flex items-center justify-center gap-2 rounded-xl bg-octus-600 px-6 py-4 font-bold text-white shadow-xl shadow-octus-600/20 transition hover:bg-octus-700">
                 Testar o Octus por 15 dias <ArrowRight size={19} />
               </a>
-              <a href="#fundadores" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-6 py-4 font-bold transition ${theme.outline}`}>
-                Conhecer Clientes Fundadores
+              {/* Secundário passa a ser "ver o produto" em vez do programa de
+                  Fundadores: quem ainda não confia quer olhar o sistema antes de
+                  qualquer proposta comercial, e o #plataforma logo abaixo já tem
+                  as telas reais de PDV, estoque e relatórios. Fundadores continua
+                  no menu e ganha a seção inteira mais adiante. */}
+              <a href="#plataforma" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-6 py-4 font-bold transition ${theme.outline}`}>
+                <PlayCircle size={19} /> Ver o Octus funcionando
               </a>
             </div>
-            <div className={`mt-9 hidden flex-wrap gap-x-6 gap-y-3 text-sm font-semibold sm:flex ${theme.body}`}>
-              {['Sem cartão no teste', 'Configuração acompanhada', 'Sua marca em primeiro lugar', 'Fiscal e venda conectados'].map(item => (
-                <span key={item} className="inline-flex items-center gap-2"><CheckCircle2 size={17} className="octus-accent" />{item}</span>
-              ))}
-            </div>
+            {/* Os quatro selos viram uma linha só: eram quatro alvos com ícone
+                disputando atenção logo abaixo do CTA, no ponto em que a página
+                precisa de silêncio pro botão respirar. O conteúdo é o mesmo. */}
+            <p className={`mt-7 hidden text-sm font-semibold sm:block ${theme.muted}`}>
+              Sem cartão no teste · configuração acompanhada · fiscal e venda conectados
+            </p>
           </div>
         </div>
       </section>

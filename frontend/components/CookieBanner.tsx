@@ -62,14 +62,29 @@ export default function CookieBanner() {
 
   return (
     <div className="js-cookie-banner fixed inset-x-3 bottom-3 z-[9999] mx-auto max-w-3xl print:hidden" role="dialog" aria-modal="true" aria-labelledby="cookie-title">
-      <div className="rounded-2xl border border-[#0C3D5A]/15 bg-white p-5 text-[#22384A] shadow-2xl shadow-[#0C3D5A]/20 sm:p-6">
+      <div className="rounded-2xl border border-[#0C3D5A]/15 bg-white p-4 text-[#22384A] shadow-2xl shadow-[#0C3D5A]/20 sm:p-6">
         <div className="flex items-start gap-3">
-          <span className="rounded-xl bg-brand-50 p-2 text-brand-700"><Cookie className="h-5 w-5" /></span>
+          {/* O ícone some no celular: são ~52px de largura e altura gastos em
+              decoração, na tela em que cada linha do card empurra o conteúdo
+              da página pra baixo. O título já diz do que se trata. */}
+          <span className="hidden rounded-xl bg-brand-50 p-2 text-brand-700 sm:inline-block"><Cookie className="h-5 w-5" /></span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="cookie-title" className="font-bold text-[#0C3D5A]">Sua privacidade, sua escolha</h2>
-                <p className="mt-1 text-sm leading-relaxed text-[#526E80]">
+                {/* Duas versões do mesmo aviso porque o problema é de espaço, não
+                    de conteúdo: em 375px o parágrafo completo empurrava o card
+                    até ~metade da tela e cobria o CTA do hero na primeira visita
+                    — a pior tela possível pra quem chega pela primeira vez. No
+                    desktop o card cabe no rodapé e o texto longo fica.
+                    A versão curta mantém as três informações que importam
+                    (necessários sempre ativos, opcionais só com autorização, nada
+                    é vendido); o detalhamento continua a um toque, na Política de
+                    Cookies logo abaixo. */}
+                <p className="mt-1 text-sm leading-relaxed text-[#526E80] sm:hidden">
+                  Cookies necessários estão sempre ativos. Os opcionais, só com sua autorização — e não vendemos seus dados.
+                </p>
+                <p className="mt-1 hidden text-sm leading-relaxed text-[#526E80] sm:block">
                   Cookies necessários mantêm login, segurança e comandas funcionando e estão sempre ativos.
                   Com sua autorização, usamos dados opcionais para medir e melhorar o sistema. Não vendemos seus dados.
                 </p>
@@ -94,9 +109,19 @@ export default function CookieBanner() {
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 {!customizing && (
-                  <button onClick={() => setCustomizing(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#0C3D5A]/20 px-3 py-2 text-xs font-semibold hover:bg-brand-50"><Settings2 className="h-3.5 w-3.5" /> Personalizar</button>
+                  <button onClick={() => setCustomizing(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-[#0C3D5A]/20 px-3 py-2 text-xs font-semibold hover:bg-brand-50">
+                    <Settings2 className="h-3.5 w-3.5" />
+                    <span className="sm:hidden">Opções</span>
+                    <span className="hidden sm:inline">Personalizar</span>
+                  </button>
                 )}
-                <button onClick={() => persist(false, false)} className="rounded-lg border border-[#0C3D5A]/20 px-3 py-2 text-xs font-semibold hover:bg-brand-50">Recusar opcionais</button>
+                {/* Rótulo curto no celular pros três botões caberem em UMA
+                    linha: em duas, o card passava de 240px de altura e cobria o
+                    segundo CTA do hero. A ação é a mesma; só o texto encolhe. */}
+                <button onClick={() => persist(false, false)} className="rounded-lg border border-[#0C3D5A]/20 px-3 py-2 text-xs font-semibold hover:bg-brand-50">
+                  <span className="sm:hidden">Recusar</span>
+                  <span className="hidden sm:inline">Recusar opcionais</span>
+                </button>
                 <button onClick={() => persist(customizing ? analytics : true, customizing ? marketing : true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700"><ShieldCheck className="h-3.5 w-3.5" />{customizing ? 'Salvar escolhas' : 'Aceitar todos'}</button>
               </div>
             </div>
