@@ -22,7 +22,12 @@ export default function LojaNaoEncontradaPage() {
             <a> e não <Link>: só a navegação com reload remonta o
             SiteConfigProvider (ele vive no layout raiz e busca a config uma vez,
             na montagem). Com navegação client-side a config não seria
-            reconsultada e a home renderizaria com os defaults genéricos. */}
+            reconsultada e a home renderizaria com os defaults genéricos.
+
+            É exatamente o caso que a regra no-html-link-for-pages não prevê:
+            ela existe pra ninguém perder o roteamento client-side por descuido,
+            e aqui perdê-lo é o objetivo. Trocar por <Link> devolveria o bug. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/"
           className="mt-6 inline-block rounded-xl border border-surface-500 bg-surface-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-surface-500"

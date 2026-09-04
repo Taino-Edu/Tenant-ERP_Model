@@ -15,7 +15,9 @@ export default function LojaSuspensaPage() {
         {/* Mesma saída da /loja-nao-encontrada, pelo mesmo motivo: o visitante
             chega aqui por redirect e fica com a URL na barra. Quando a loja é
             reativada, sem este botão ele continuaria vendo "indisponível" até
-            digitar o endereço de novo. Ver o comentário de lá sobre <a> vs Link. */}
+            digitar o endereço de novo. Ver o comentário de lá sobre <a> vs Link
+            e sobre por que a regra do ESLint é dispensada aqui. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a
           href="/"
           className="mt-6 inline-block rounded-xl border border-surface-500 bg-surface-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-surface-500"
