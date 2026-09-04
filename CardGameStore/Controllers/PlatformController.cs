@@ -75,6 +75,7 @@ public class PlatformController : ControllerBase
         CustomDomain   = t.CustomDomain,
         MaxUsers       = t.MaxUsers,
         IsPubliclyListed = t.IsPubliclyListed,
+        HasLogo          = !string.IsNullOrEmpty(t.LogoUrl),
         MonthlyPrice    = t.MonthlyPrice,
         SetupFee        = t.SetupFee,
         BillingStartsOn = t.BillingStartsOn,

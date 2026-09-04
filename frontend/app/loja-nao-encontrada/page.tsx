@@ -13,6 +13,22 @@ export default function LojaNaoEncontradaPage() {
           O endereço acessado não corresponde a nenhuma loja ativa. Confira se o
           subdomínio está correto ou entre em contato com a loja.
         </p>
+        {/* Saída obrigatória: o SiteConfigContext chega aqui via
+            window.location.href, então a URL fica na barra do visitante. Sem
+            este botão, uma indisponibilidade de segundos deixava a loja
+            "fechada" pra sempre pra quem foi redirecionado — recarregar e
+            voltar caem nesta mesma tela estática, que não checa nada.
+
+            <a> e não <Link>: só a navegação com reload remonta o
+            SiteConfigProvider (ele vive no layout raiz e busca a config uma vez,
+            na montagem). Com navegação client-side a config não seria
+            reconsultada e a home renderizaria com os defaults genéricos. */}
+        <a
+          href="/"
+          className="mt-6 inline-block rounded-xl border border-surface-500 bg-surface-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-surface-500"
+        >
+          Tentar de novo
+        </a>
       </div>
     </div>
   )

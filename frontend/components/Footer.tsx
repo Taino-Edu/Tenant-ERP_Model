@@ -9,6 +9,12 @@ import { usePathname } from 'next/navigation'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { OPEN_COOKIE_SETTINGS_EVENT } from '@/lib/cookieConsent'
 import Logo from '@/components/Logo'
+import { ROOT_DOMAIN } from '@/lib/institucional'
+
+// Site da plataforma, montado do mesmo NEXT_PUBLIC_ROOT_DOMAIN que o resto do
+// app usa pra compor subdomínio de loja — sem o domínio configurado o logo fica
+// sem link, como era antes, em vez de apontar pra um href quebrado.
+const PLATFORM_SITE_URL = ROOT_DOMAIN ? `https://${ROOT_DOMAIN}` : null
 
 export default function Footer() {
   const pathname = usePathname()
@@ -36,7 +42,25 @@ export default function Footer() {
             da própria vitrine. Mesma regra da tela de login. */}
         {!site.logoUrl && (
           <div className="flex justify-center">
-            <Logo className="h-7 w-[52px] opacity-90" />
+            {/* Clicável: o polvo é a marca da plataforma, e um logo que não leva
+                a lugar nenhum é a primeira coisa que o visitante tenta clicar.
+                Vai pro site do Octus (não pra home da loja) porque é ali que ele
+                é a marca — quem chegou pela vitrine do lojista e clica aqui está
+                perguntando "que sistema é esse?". <a> comum em vez de <Link>: é
+                navegação pra outra origem, que o roteador do Next não cobre. */}
+            {PLATFORM_SITE_URL ? (
+              <a
+                href={PLATFORM_SITE_URL}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Octus — site da plataforma"
+                className="transition-opacity hover:opacity-100"
+              >
+                <Logo className="h-7 w-[52px] opacity-90" />
+              </a>
+            ) : (
+              <Logo className="h-7 w-[52px] opacity-90" />
+            )}
           </div>
         )}
         {/* Links legais.

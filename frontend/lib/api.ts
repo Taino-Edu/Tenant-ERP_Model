@@ -815,6 +815,9 @@ export interface TenantSummary {
   customDomain: string | null
   maxUsers: number | null
   isPubliclyListed: boolean
+  /** A vitrine pública exige logo além do isPubliclyListed — sem logo a loja
+   *  fica autorizada mas não aparece. Ver PublicDirectoryController.ListTenants. */
+  hasLogo: boolean
   /** Mensalidade cobrada desta loja. Zero = cortesia/piloto. */
   monthlyPrice: number
   /** Taxa de implantação cobrada na contratação. */

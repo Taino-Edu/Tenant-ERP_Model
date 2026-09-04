@@ -187,6 +187,15 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   const [mensalidade, setMensalidade] = useState(String(tenant.monthlyPrice ?? 0))
   const [implantacao, setImplantacao] = useState(String(tenant.setupFee ?? 0))
 
+  // O requisito do logo aparece no próprio botão, e não só num toast que some:
+  // quem abre a tela depois precisa entender por que a loja está autorizada e
+  // ausente da vitrine.
+  const rotuloVitrine = !tenant.isPubliclyListed
+    ? 'Autorizar na vitrine de clientes'
+    : tenant.hasLogo
+      ? 'Remover da vitrine de clientes'
+      : 'Autorizada, mas sem logo — a loja só aparece na vitrine depois que o lojista cadastrar o logo. Clique para remover a autorização.'
+
   /** Trocar de plano aplica o preço de tabela junto — era exatamente isso que
    *  faltava: o nome mudava e o valor ficava para trás. Personalizado preserva
    *  o valor atual, porque ali quem manda é o negociado. */
@@ -272,7 +281,16 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     setUpdatingListing(true)
     try {
       await platformApi.updateTenantPublicListing(tenant.id, !tenant.isPubliclyListed)
-      toast.success(tenant.isPubliclyListed ? 'Loja removida da vitrine.' : 'Loja autorizada na vitrine.')
+      // Autorizar não basta: o diretório público também exige logo, e sem ele a
+      // loja fica autorizada e invisível. O toast dizia "autorizada" mesmo assim,
+      // e não havia como descobrir o que faltava sem ler o controller.
+      if (tenant.isPubliclyListed) {
+        toast.success('Loja removida da vitrine.')
+      } else if (tenant.hasLogo) {
+        toast.success('Loja autorizada na vitrine.')
+      } else {
+        toast.success('Loja autorizada — só aparece na vitrine depois que o lojista cadastrar o logo.')
+      }
       onChanged()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao atualizar a vitrine do tenant.'))
@@ -456,10 +474,15 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       {acoesPermitidas.gerenciar && <button
         onClick={togglePublicListing}
         disabled={updatingListing}
-        title={tenant.isPubliclyListed ? 'Remover da vitrine de clientes' : 'Autorizar na vitrine de clientes'}
-        aria-label={tenant.isPubliclyListed ? 'Remover da vitrine de clientes' : 'Autorizar na vitrine de clientes'}
+        title={rotuloVitrine}
+        aria-label={rotuloVitrine}
+        // Autorizada sem logo ganha cor de alerta: o estado "ligado, mas não
+        // aparece" era visualmente idêntico ao "ligado e aparecendo", então a
+        // lista dizia que N lojas estavam na vitrine enquanto ela vinha vazia.
         className={clsx(BTN_ACAO, 'border-surface-500',
-          tenant.isPubliclyListed ? 'bg-brand-600/10 text-brand-300 hover:border-brand-400' : 'text-gray-500 hover:border-surface-400 hover:text-white')}
+          !tenant.isPubliclyListed ? 'text-gray-500 hover:border-surface-400 hover:text-white'
+            : tenant.hasLogo ? 'bg-brand-600/10 text-brand-300 hover:border-brand-400'
+            : 'bg-amber-500/10 text-amber-300 hover:border-amber-400')}
       >
         {updatingListing ? <Spinner size="sm" /> : tenant.isPubliclyListed
           ? <Store className="w-3.5 h-3.5" />

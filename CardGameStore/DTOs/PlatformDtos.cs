@@ -53,6 +53,15 @@ public class TenantSummaryDto
     public int? MaxUsers { get; set; }
     public bool IsPubliclyListed { get; set; }
 
+    /// <summary>
+    /// Se a loja tem logo no catálogo — requisito que o diretório público exige
+    /// além do IsPubliclyListed (ver PublicDirectoryController.ListTenants).
+    /// Sem isso o painel autorizava a loja na vitrine, avisava que deu certo, e
+    /// a loja não aparecia lá, sem nada explicando o porquê. Booleano em vez da
+    /// URL porque o painel só precisa saber se o requisito está cumprido.
+    /// </summary>
+    public bool HasLogo { get; set; }
+
     /// <summary>Mensalidade cobrada desta loja. Zero = cortesia/piloto.</summary>
     public decimal MonthlyPrice { get; set; }
 

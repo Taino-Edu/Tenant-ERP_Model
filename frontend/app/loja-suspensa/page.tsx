@@ -12,6 +12,16 @@ export default function LojaSuspensaPage() {
         <p className="text-gray-400 text-sm">
           Volte mais tarde ou entre em contato diretamente com a loja para mais informações.
         </p>
+        {/* Mesma saída da /loja-nao-encontrada, pelo mesmo motivo: o visitante
+            chega aqui por redirect e fica com a URL na barra. Quando a loja é
+            reativada, sem este botão ele continuaria vendo "indisponível" até
+            digitar o endereço de novo. Ver o comentário de lá sobre <a> vs Link. */}
+        <a
+          href="/"
+          className="mt-6 inline-block rounded-xl border border-surface-500 bg-surface-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-surface-500"
+        >
+          Tentar de novo
+        </a>
       </div>
     </div>
   )
