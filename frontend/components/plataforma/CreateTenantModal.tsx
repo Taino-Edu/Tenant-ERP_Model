@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { platformApi, getErrorMessage, TENANT_MODULES, type TenantKind } from '@/lib/api'
 import { PLANOS, PLANO_PERSONALIZADO, taxaImplantacao, formatarReais, type Plano } from '@/lib/planos'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Loader2, X, Check, Server, Unplug } from 'lucide-react'
+import { Building2, Plus, Loader2, X, Check, Server, Unplug, Store } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function CreateTenantModal({
@@ -23,6 +23,7 @@ export default function CreateTenantModal({
   const [modules, setModules]   = useState<string[]>(['fiscal'])
   const [planName, setPlanName] = useState<string>(PLANO_PERSONALIZADO)
   const [maxUsers, setMaxUsers] = useState<number | ''>('')
+  const [isPubliclyListed, setIsPubliclyListed] = useState(false)
   const [loading, setLoading]   = useState(false)
 
   // O nome precisa bater EXATAMENTE com a tabela de preços do backend
@@ -53,6 +54,7 @@ export default function CreateTenantModal({
         adminPassword: kind === 'Native' ? password : undefined,
         enabledModules: modules, planName,
         maxUsers: maxUsers === '' ? null : maxUsers,
+        isPubliclyListed,
       })
       toast.success(`Tenant "${slug}" criado com sucesso!`)
       onCreated(data.id)
@@ -183,6 +185,33 @@ export default function CreateTenantModal({
             />
             <p className="text-xs text-gray-400 mt-1">Vazio = sem limite. Conta Admin + Operator, não clientes.</p>
           </div>
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={isPubliclyListed}
+            onClick={() => setIsPubliclyListed(value => !value)}
+            className={clsx(
+              'w-full flex items-start gap-3 rounded-xl border p-3 text-left transition-colors',
+              isPubliclyListed
+                ? 'border-brand-500/60 bg-brand-600/10'
+                : 'border-surface-500 hover:border-surface-400',
+            )}
+          >
+            <span className={clsx(
+              'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border',
+              isPubliclyListed ? 'border-brand-500 bg-brand-500' : 'border-surface-400',
+            )}>
+              {isPubliclyListed && <Check className="h-3.5 w-3.5 text-white" />}
+            </span>
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                <Store className="h-4 w-4 text-brand-400" /> Exibir na vitrine de clientes
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-gray-400">
+                A loja aparecerá em “Quem já usa” somente depois que a logo dela for configurada.
+              </span>
+            </span>
+          </button>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-surface-500 shrink-0">
           <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>

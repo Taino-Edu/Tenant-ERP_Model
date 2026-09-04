@@ -814,6 +814,7 @@ export interface TenantSummary {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
   maxUsers: number | null
+  isPubliclyListed: boolean
   /** Mensalidade cobrada desta loja. Zero = cortesia/piloto. */
   monthlyPrice: number
   /** Taxa de implantação cobrada na contratação. */
@@ -822,7 +823,7 @@ export interface TenantSummary {
 
 export interface CreateTenantRequest {
   slug: string; kind?: TenantKind; adminEmail?: string; adminPassword?: string; enabledModules?: string[]
-  planName?: string; maxUsers?: number | null
+  planName?: string; maxUsers?: number | null; isPubliclyListed?: boolean
 }
 
 export interface IntegrationClientDto {
@@ -918,6 +919,8 @@ export const platformApi = {
     api.delete(`/api/platform/tenants/${tenantId}/integration-clients/${id}`),
   updateTenantStatus: (id: string, status: TenantStatus) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
+  updateTenantPublicListing: (id: string, isPubliclyListed: boolean) =>
+    api.patch<TenantSummary>(`/api/platform/tenants/${id}/public-listing`, { isPubliclyListed }),
   updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/billing`, req),
   updateTenantDomain: (id: string, customDomain: string | null) =>

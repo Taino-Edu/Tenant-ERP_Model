@@ -45,7 +45,10 @@ public class PublicDirectoryController : ControllerBase
     public async Task<IActionResult> ListTenants()
     {
         var tenants = await _catalog.Tenants
-            .Where(t => t.Status == TenantStatus.Active)
+            .Where(t => t.Status == TenantStatus.Active
+                && t.IsPubliclyListed
+                && t.LogoUrl != null
+                && t.LogoUrl != "")
             .OrderBy(t => t.DisplayName ?? t.Slug)
             .Select(t => new PublicTenantDto
             {

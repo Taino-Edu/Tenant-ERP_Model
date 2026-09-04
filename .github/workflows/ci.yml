@@ -149,6 +149,22 @@ jobs:
             && echo "Site respondendo 200 após o deploy."
           curl -fsS -o /dev/null "https://dev-swagger.3esysten.com.br/swagger/index.html" \
             && echo "Swagger público respondendo após o deploy."
-          curl -fsS "https://3esysten.com.br/api/push/vapid-public-key" \
-            | grep -q '"publicKey"' \
-            && echo "Push VAPID configurado após o deploy."
+          # A Cloudflare pode devolver um 522 transitório enquanto as conexões
+          # com a origem são renovadas após o restart. Repetimos por até ~1 min,
+          # mas ainda falhamos o job se a API realmente continuar indisponível.
+          vapid_ok=false
+          for attempt in 1 2 3 4; do
+            if curl --connect-timeout 10 --max-time 20 -fsS \
+              "https://3esysten.com.br/api/push/vapid-public-key" \
+              | grep -q '"publicKey"'; then
+              vapid_ok=true
+              break
+            fi
+            echo "VAPID ainda indisponível (tentativa $attempt/4); aguardando..."
+            sleep $((attempt * 5))
+          done
+          if [[ "$vapid_ok" != "true" ]]; then
+            echo "::error::Push VAPID não respondeu corretamente após 4 tentativas."
+            exit 1
+          fi
+          echo "Push VAPID configurado após o deploy."

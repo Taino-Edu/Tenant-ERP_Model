@@ -33,6 +33,9 @@ public class CreateTenantRequest
     /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</summary>
     [Range(1, 10000)]
     public int? MaxUsers { get; set; }
+
+    /// <summary>Se a loja poderá aparecer na vitrine institucional quando tiver uma logo.</summary>
+    public bool IsPubliclyListed { get; set; }
 }
 
 public class TenantSummaryDto
@@ -48,6 +51,7 @@ public class TenantSummaryDto
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
     public string? CustomDomain { get; set; }
     public int? MaxUsers { get; set; }
+    public bool IsPubliclyListed { get; set; }
 
     /// <summary>Mensalidade cobrada desta loja. Zero = cortesia/piloto.</summary>
     public decimal MonthlyPrice { get; set; }
@@ -72,6 +76,11 @@ public class UpdateTenantStatusRequest
 {
     [Required]
     public string Status { get; set; } = string.Empty;
+}
+
+public class UpdateTenantPublicListingRequest
+{
+    public bool IsPubliclyListed { get; set; }
 }
 
 /// <summary>Body de DELETE /api/platform/tenants/{id}. Exclusão apaga o schema

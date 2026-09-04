@@ -16,7 +16,9 @@ public interface ITenantProvisioningService
     /// <param name="planName">Nome do plano contratado (ex: "Mar", "Lagoa"). Null cai no default do model ("Rio").</param>
     /// <param name="maxUsers">Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</param>
     /// <param name="kind">Native cria banco e admin; ExternalIntegrated mantém os dados no sistema de origem.</param>
+    /// <param name="isPubliclyListed">Autoriza a vitrine institucional; a exibição só ocorre depois que a loja tiver logo.</param>
     Task<Tenant> ProvisionAsync(
         string slug, string? adminEmail, string? adminPassword, string[]? enabledModules = null,
-        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native);
+        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native,
+        bool isPubliclyListed = false);
 }
