@@ -134,8 +134,48 @@ jobs:
             exit 1
           fi
           echo "HOST sanitizado ok (tamanho=${#HOST}); conectando..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
-            "$USUARIO@$HOST" 'bash /opt/tenant-erp/deploy/update.sh'
+
+          SSH_OPTS=(
+            -i ~/.ssh/deploy_key
+            -o StrictHostKeyChecking=accept-new
+            -o BatchMode=yes
+            -o ConnectTimeout=15
+            # O update.sh faz backup, build e restart: a sessão fica minutos
+            # ociosa e o keepalive evita que um NAT no caminho a derrube.
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=6
+          )
+
+          # O sshd do VPS às vezes reseta o handshake do runner
+          # ("kex_exchange_identification: Connection reset by peer"): o IP
+          # sorteado pro runner cai num ban do fail2ban, o sshd bate no
+          # MaxStartups ou o serviço está reiniciando. Sondamos a porta antes
+          # de disparar o deploy — a sonda é barata e pode ser repetida à
+          # vontade, ao contrário do update.sh, que faz backup + build + restart
+          # e não pode rodar duas vezes em paralelo. Por isso o retry fica AQUI
+          # e não em volta do deploy em si.
+          conexao_ok=false
+          erro_sonda="$(mktemp)"
+          for tentativa in 1 2 3 4 5; do
+            if ssh "${SSH_OPTS[@]}" "$USUARIO@$HOST" true 2>"$erro_sonda"; then
+              conexao_ok=true
+              break
+            fi
+            # O Actions mascara o secret, então o IP não vaza nessa linha.
+            echo "SSH indisponível (tentativa $tentativa/5): $(tail -n 1 "$erro_sonda")"
+            # if/fi em vez de `[ ... ] && sleep`: sob `bash -e`, o teste falso
+            # da última tentativa viraria status 1 e mataria o step antes da
+            # mensagem de erro abaixo.
+            if [ "$tentativa" -lt 5 ]; then
+              sleep $((tentativa * 30))
+            fi
+          done
+          if [[ "$conexao_ok" != "true" ]]; then
+            echo "::error::SSH do VPS não respondeu em 5 tentativas (~5 min). Confira sshd e fail2ban pelo console do provedor — o deploy não chegou a rodar."
+            exit 1
+          fi
+
+          ssh "${SSH_OPTS[@]}" "$USUARIO@$HOST" 'bash /opt/tenant-erp/deploy/update.sh'
 
       - name: Smoke test pós-deploy
         if: steps.check.outputs.configured == 'true'
