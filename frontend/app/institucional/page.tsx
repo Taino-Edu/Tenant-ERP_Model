@@ -239,19 +239,20 @@ export default function InstitucionalPage() {
               </div>
             )}
             <p className="mb-5 text-sm font-extrabold uppercase tracking-[0.22em] octus-accent">Octus · gestão que veste a sua marca</p>
-            {/* A headline anterior ("Tudo o que seu negócio precisa, numa tela
-                só") descrevia o produto. Esta nomeia o alívio que o lojista
-                procura — fechar o mês sem descobrir o prejuízo depois — e junta
-                o diferencial da plataforma, que é a marca dele na frente. */}
+            {/* O eixo é GESTÃO, não venda: quem decide a compra é quem
+                administra a empresa — hoje com PDV num sistema, fiscal em outro
+                e planilha no terceiro —, não quem opera o caixa. A marca própria
+                continua no texto, mas como diferencial depois da promessa
+                central, e não no lugar dela. */}
             {/* text-4xl no celular: em 375px a headline ocupava quatro linhas em
                 text-5xl e empurrava os dois CTAs pra fora da primeira tela —
                 sozinha, antes mesmo do banner de cookies entrar. Do sm pra cima
                 nada muda, que é onde a tipografia grande tem espaço pra impor. */}
             <h1 className={`text-4xl font-black leading-[1.04] tracking-[-0.045em] sm:text-6xl sm:leading-[1.02] lg:text-7xl ${theme.heading}`}>
-              Feche o mês sem susto, <span className="octus-accent">com a sua marca na frente.</span>
+              A gestão da sua empresa <span className="octus-accent">sem trocar de sistema.</span>
             </h1>
             <p className={`mt-5 max-w-2xl text-lg leading-8 sm:mt-7 sm:text-xl ${theme.body}`}>
-              PDV, estoque, fiscal, crediário e financeiro conectados: a venda vira nota e caixa no mesmo movimento, num ERP com o nome, as cores e o domínio da sua empresa.
+              PDV, estoque, fiscal, crediário e financeiro no mesmo lugar: o que sai do caixa já entra no estoque e no financeiro, sem redigitar nada em outro programa — e com a identidade da sua empresa na frente do cliente.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:mt-9 sm:flex-row">
               <a href="#contato" className="inline-flex items-center justify-center gap-2 rounded-xl bg-octus-600 px-6 py-4 font-bold text-white shadow-xl shadow-octus-600/20 transition hover:bg-octus-700">
