@@ -333,4 +333,74 @@ public class TenantResolutionMiddlewareTests
         tenantContext.TenantId.Should().Be(tenantId);
         tenantContext.SchemaName.Should().Be("external_santuario_nerd");
     }
+
+    // ── Cache do catálogo: positivo sim, negativo não ────────────────────────
+
+    [Fact]
+    public async Task InvokeAsync_TenantAusenteNaPrimeiraConsulta_NaoFicaPresoNo404()
+    {
+        // O 404 não pode se auto-prolongar. Com o negativo em cache (TTL de 30s),
+        // uma loja legítima que faltasse numa leitura continuava respondendo "Loja
+        // não encontrada" pra todo visitante até o TTL vencer, sem reconsultar o
+        // banco — o formato do incidente relatado no subdomínio benditacoxinha.
+        // O MESMO middleware é reusado nas duas chamadas: é o cache dele que está
+        // sob teste, e uma instância nova passaria mesmo com o bug presente.
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
+
+        var (ctx1, tenantContext1) = BuildContext("loja-atrasada.3esysten.com.br", services);
+        ctx1.Response.Body = new MemoryStream();
+        await middleware.InvokeAsync(ctx1, tenantContext1, catalog);
+        ctx1.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+
+        var tenantId = Guid.NewGuid();
+        catalog.Tenants.Add(new Tenant
+        {
+            Id = tenantId, Slug = "loja-atrasada", SchemaName = "tenant_loja_atrasada",
+            Status = TenantStatus.Active,
+        });
+        await catalog.SaveChangesAsync();
+
+        var (ctx2, tenantContext2) = BuildContext("loja-atrasada.3esysten.com.br", services);
+        ctx2.Response.Body = new MemoryStream();
+        await middleware.InvokeAsync(ctx2, tenantContext2, catalog);
+
+        ctx2.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        tenantContext2.TenantId.Should().Be(tenantId, "a ausência anterior não pode ter sido cacheada");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_TenantResolvido_ContinuaVindoDoCache()
+    {
+        // Contraparte do teste acima: tirar o negativo do cache não pode ter
+        // custado o cache positivo, que é o caminho quente de toda requisição.
+        var catalog = CreateCatalogDb();
+        var tenantId = Guid.NewGuid();
+        var tenant = new Tenant
+        {
+            Id = tenantId, Slug = "loja-quente", SchemaName = "tenant_loja_quente",
+            Status = TenantStatus.Active,
+        };
+        catalog.Tenants.Add(tenant);
+        await catalog.SaveChangesAsync();
+
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
+
+        var (ctx1, tenantContext1) = BuildContext("loja-quente.3esysten.com.br", services);
+        await middleware.InvokeAsync(ctx1, tenantContext1, catalog);
+        tenantContext1.TenantId.Should().Be(tenantId);
+
+        // Some com o tenant do catálogo: se a segunda chamada ainda resolver, veio
+        // do cache e não de uma consulta nova.
+        catalog.Tenants.Remove(tenant);
+        await catalog.SaveChangesAsync();
+
+        var (ctx2, tenantContext2) = BuildContext("loja-quente.3esysten.com.br", services);
+        ctx2.Response.Body = new MemoryStream();
+        await middleware.InvokeAsync(ctx2, tenantContext2, catalog);
+
+        tenantContext2.TenantId.Should().Be(tenantId, "o resultado positivo deve continuar cacheado");
+    }
 }

@@ -13,6 +13,9 @@
 // Já um subdomínio BEM-FORMADO do RootDomain que não existe no catálogo
 // (loja-inexistente.RootDomain) retorna 404 — não pode servir a loja do
 // tenant-zero, ver InvokeAsync.
+//
+// O catálogo é consultado com cache de TTL curto, e só o resultado POSITIVO é
+// guardado — ver LookupCachedAsync para o porquê de o negativo ficar de fora.
 // =============================================================================
 
 using Microsoft.EntityFrameworkCore;
@@ -65,14 +68,10 @@ public class TenantResolutionMiddleware
 
         if (slug is not null)
         {
-            tenant = await _cache.GetOrCreateAsync($"tenant-slug:{slug}", async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = CacheTtl;
-                return await catalog.Tenants
-                    .Where(t => t.Slug == slug)
-                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
-                    .FirstOrDefaultAsync();
-            });
+            tenant = await LookupCachedAsync($"tenant-slug:{slug}", () => catalog.Tenants
+                .Where(t => t.Slug == slug)
+                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
+                .FirstOrDefaultAsync());
 
             // Slug bem-formado (subdomínio de nível único do RootDomain) que NÃO
             // bate com nenhum tenant: é uma loja desconhecida (typo de subdomínio,
@@ -84,6 +83,15 @@ public class TenantResolutionMiddleware
             // não há o que preservar aqui.
             if (tenant is null)
             {
+                // Logado porque este caminho é indistinguível de fora: o visitante
+                // vê "Loja não encontrada" e o log ficava mudo, sem dizer nem qual
+                // slug foi procurado. Um 404 aqui é ou typo do visitante (ruído
+                // esperado) ou uma loja legítima que sumiu da consulta (incidente) —
+                // sem a linha abaixo não dá pra separar os dois depois do fato.
+                _logger.LogWarning(
+                    "Tenant não encontrado para o slug {Slug} (host {Host}, path {Path}) — respondendo 404.",
+                    slug, host, context.Request.Path);
+
                 context.Response.StatusCode = StatusCodes.Status404NotFound;
                 await context.Response.WriteAsJsonAsync(new { Message = "Loja não encontrada." });
                 return;
@@ -98,14 +106,10 @@ public class TenantResolutionMiddleware
         if (tenant is null && slug is null)
         {
             var hostLower = host.ToLowerInvariant();
-            tenant = await _cache.GetOrCreateAsync($"tenant-domain:{hostLower}", async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = CacheTtl;
-                return await catalog.Tenants
-                    .Where(t => t.CustomDomain == hostLower)
-                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
-                    .FirstOrDefaultAsync();
-            });
+            tenant = await LookupCachedAsync($"tenant-domain:{hostLower}", () => catalog.Tenants
+                .Where(t => t.CustomDomain == hostLower)
+                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
+                .FirstOrDefaultAsync());
         }
 
         if (tenant is not null)
@@ -149,6 +153,32 @@ public class TenantResolutionMiddleware
         await SetTenantAndContinue(
             context, tenantContext,
             TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+    }
+
+    /// <summary>
+    /// Consulta o catálogo com cache de TTL curto, guardando SOMENTE o resultado
+    /// positivo.
+    ///
+    /// O GetOrCreateAsync que estava aqui grava o que a factory devolver —
+    /// inclusive null. Uma única leitura vazia (tenant recém-criado que ainda não
+    /// apareceu na réplica, hiccup do catálogo) virava 30 segundos de "Loja não
+    /// encontrada" pra TODOS os visitantes daquela loja, sem sequer tocar o banco
+    /// de novo: o erro se auto-prolongava muito além do problema que o causou.
+    ///
+    /// Não cachear o negativo custa uma query por request enquanto o host for
+    /// desconhecido — que é justamente o caso raro (typo de subdomínio). O caminho
+    /// quente, com tenant existente, continua cacheado igual.
+    /// </summary>
+    private async Task<TenantLookup?> LookupCachedAsync(string key, Func<Task<TenantLookup?>> query)
+    {
+        if (_cache.TryGetValue(key, out TenantLookup? cached))
+            return cached;
+
+        var tenant = await query();
+        if (tenant is not null)
+            _cache.Set(key, tenant, CacheTtl);
+
+        return tenant;
     }
 
     /// <summary>
