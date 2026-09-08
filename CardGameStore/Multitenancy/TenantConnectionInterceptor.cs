@@ -13,6 +13,7 @@
 // entre tenants sem passar por aqui, quebrando o isolamento silenciosamente.
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -22,11 +23,22 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
 {
     private readonly ITenantContext _tenantContext;
     private readonly ILogger<TenantConnectionInterceptor> _logger;
+    private readonly TenantDatabaseCredentials? _credentials;
 
-    public TenantConnectionInterceptor(ITenantContext tenantContext, ILogger<TenantConnectionInterceptor> logger)
+    /// <param name="tenantContext">Tenant do escopo, lido a cada abertura de conexão.</param>
+    /// <param name="logger">Diagnóstico de isolamento e de realinhamento de credencial.</param>
+    /// <param name="credentials">
+    /// Quando informado, a credencial da conexão é realinhada ao tenant no momento
+    /// da abertura (ver AlignCredentials). Fica nulo no
+    /// <see cref="TenantDatabaseAdmin"/>, que abre conexão com a credencial
+    /// administrativa de propósito e não pode ser rebaixada pro papel do tenant.
+    /// </param>
+    public TenantConnectionInterceptor(ITenantContext tenantContext, ILogger<TenantConnectionInterceptor> logger,
+        TenantDatabaseCredentials? credentials = null)
     {
         _tenantContext = tenantContext;
         _logger        = logger;
+        _credentials   = credentials;
     }
 
     public override InterceptionResult ConnectionOpening(
@@ -36,6 +48,7 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         // que um identificador inválido chegue ao SQL, isso preserva o fail-fast
         // mesmo quando o servidor está indisponível ou o pool está sob pressão.
         ValidateSchemaName();
+        AlignCredentials(connection);
         return base.ConnectionOpening(connection, eventData, result);
     }
 
@@ -44,7 +57,60 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         CancellationToken cancellationToken = default)
     {
         ValidateSchemaName();
+        AlignCredentials(connection);
         return base.ConnectionOpeningAsync(connection, eventData, result, cancellationToken);
+    }
+
+    /// <summary>
+    /// Garante que a conexão abra com o papel PostgreSQL do tenant ATUAL, e não
+    /// com o que valia quando as DbContextOptions foram montadas.
+    ///
+    /// POR QUE É NECESSÁRIO
+    /// A connection string é resolvida uma vez, quando o AppDbContext é criado no
+    /// escopo (Program.cs, `ConnectionStringFor(ITenantContext.TenantId)`). Isso
+    /// assume que o tenant já está definido nesse instante — verdade num request
+    /// HTTP, onde o middleware roda antes de qualquer controller.
+    ///
+    /// No SignalR não é. O hub é CONSTRUÍDO antes de o TenantHubFilter rodar, e
+    /// construir o hub já resolve IComandaService e, com ele, o AppDbContext —
+    /// ainda na tenant-zero. O filtro então corrige o ITenantContext, e o
+    /// resultado era o pior meio-termo possível: `SET search_path` no schema
+    /// certo, com a credencial do tenant-zero, que não tem USAGE no schema do
+    /// tenant. `current_schema()` voltava vazio e TODA conexão de hub em loja
+    /// real morria — o painel "LIVE" nunca atualizava fora da tenant-zero, que é
+    /// justamente onde se desenvolve.
+    ///
+    /// Alinhar aqui conserta a classe inteira do problema, não só o hub: qualquer
+    /// escopo que chame Set() depois de o DbContext existir passa a abrir com a
+    /// credencial certa. O schema já era resolvido na abertura; agora a
+    /// credencial também.
+    ///
+    /// Trocar a connection string com a conexão FECHADA é operação suportada, e o
+    /// pool do Npgsql é por string — a conexão sai e volta pro pool do papel certo.
+    /// </summary>
+    private void AlignCredentials(DbConnection connection)
+    {
+        if (_credentials is null || connection.State != ConnectionState.Closed) return;
+
+        var esperada = _credentials.ConnectionStringFor(_tenantContext.TenantId);
+
+        // Compara o usuário, não a string inteira: o Npgsql normaliza a string e
+        // uma comparação textual acusaria diferença a cada abertura.
+        var atual = SafeUsername(connection.ConnectionString);
+        var alvo  = SafeUsername(esperada);
+        if (string.Equals(atual, alvo, StringComparison.Ordinal)) return;
+
+        _logger.LogDebug(
+            "Realinhando credencial da conexão de '{Atual}' para '{Alvo}' (tenant {TenantId}).",
+            atual, alvo, _tenantContext.TenantId);
+        connection.ConnectionString = esperada;
+    }
+
+    private static string? SafeUsername(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) return null;
+        try { return new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Username; }
+        catch (ArgumentException) { return null; }
     }
 
     public override async Task ConnectionOpenedAsync(
