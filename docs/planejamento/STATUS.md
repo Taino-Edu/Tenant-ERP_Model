@@ -20,7 +20,7 @@ de agora:
 | Documento | Governa |
 |---|---|
 | [`BACKLOG.md`](BACKLOG.md) | Fila operacional contínua: CRM, prospecção, dados, QA, UX, infra. |
-| [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) | Os cinco itens `RB-01` a `RB-05` decididos em 26/08: pagamentos, pedidos online, multi-CNPJ, comandas. **Manda sobre o backlog nesses cinco temas.** |
+| [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) | `RB-01` a `RB-06`: pagamentos, pedidos online, multi-CNPJ, comandas e **aplicativos móveis**. **Manda sobre o backlog nesses temas.** |
 | [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Achados `RES-00x`/`AUTH-00x` de idempotência, concorrência, guardrails e sessão. |
 
 ## Entregue desde a revisão anterior (2026-08-11 → 2026-09-08)
@@ -84,10 +84,15 @@ Detalhe e evidência em
 
 1. Fechar os itens de resiliência `RES-003`, `RES-001` e `RES-002` — nessa ordem.
 2. `REP-001`: decidir uma a uma as seis worktrees e as branches fora da `main`.
-3. `RB-02` (recebimento das vendas do lojista) e `RB-04` (multi-CNPJ), os dois de
-   prioridade alta que sobraram do rebuild.
-4. Consolidar CRM (contas, contatos, atribuição) e a camada analítica.
-5. Prospecção: favoritos, filtros, seleção em lote e deduplicação secundária.
+3. `RB-06.1` — o PWA do consumidor. Fura a fila por ser barato e não depender de
+   nada: o PWA já existe, mas foi construído para o lojista (manifest descreve o
+   ERP, atalhos apontam para a Frente de Caixa, ícone do iOS é SVG e nenhum
+   tenant tem ícone próprio).
+4. `RB-02` (recebimento das vendas do lojista) e `RB-04` (multi-CNPJ), os dois de
+   prioridade alta que sobraram do rebuild. `RB-02` é dependência do app de
+   consumidor.
+5. Consolidar CRM (contas, contatos, atribuição) e a camada analítica.
+6. Prospecção: favoritos, filtros, seleção em lote e deduplicação secundária.
 
 ## Bloqueios externos
 
