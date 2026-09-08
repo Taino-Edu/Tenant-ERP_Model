@@ -55,7 +55,11 @@ public record QuickLoginRequest(
     [Required, MaxLength(150)]  string  Name,
     [ValidCpf, MaxLength(11)]   string? Cpf,              // Opcional — apenas dígitos se fornecido
     [Required, MaxLength(20)]   string  WhatsApp,
-    [MaxLength(50)]             string? TableIdentifier = null
+    [MaxLength(50)]             string? TableIdentifier = null,
+    // Token impresso no QR Code da mesa (ver Security/MesaQrToken.cs). Opcional:
+    // criar conta e reusar a própria sessão não dependem dele — só a retomada de
+    // uma conta sem senha, que é o único caso onde "viu o QR" precisa valer algo.
+    [MaxLength(32)]             string? MesaToken = null
 );
 
 /// <summary>
@@ -88,11 +92,6 @@ public record LocateAccountRequest(
 /// (protocolo + NEXT_PUBLIC_ROOT_DOMAIN + slug) do mesmo jeito que já monta a
 /// URL de impersonação, e navega pra lá com o ticket.</summary>
 public record LocateAccountMatchDto(string Label, string TargetKind, string? TenantSlug, string Ticket);
-
-/// <summary>Busca cliente por CPF — primeiro acesso pelo site.</summary>
-public record CpfLookupRequest(
-    [Required, ValidCpf] string Cpf
-);
 
 /// <summary>Ativa a conta de um cliente existente (CPF + email + senha).</summary>
 public record SetupAccountRequest(
@@ -158,12 +157,6 @@ public class ContadorProdutoFiscalRequest
     [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosMunicipais { get; set; }
     [MaxLength(100)] public string? FonteTributos { get; set; }
 }
-
-/// <summary>Resposta da busca por CPF.</summary>
-public record CpfLookupResponse(
-    string Name,
-    bool   HasPassword
-);
 
 /// <summary>Solicita envio de email para redefinição de senha.</summary>
 public record ForgotPasswordRequest(

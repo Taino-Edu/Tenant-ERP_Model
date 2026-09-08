@@ -74,6 +74,7 @@ public class UserService : IUserService
             PointsExpired   = IsExpired(user),
             BalanceInCents  = user.BalanceInCents,
             CreatedAt       = user.CreatedAt,
+            HasPassword     = user.PasswordHash != null,
         };
     }
 

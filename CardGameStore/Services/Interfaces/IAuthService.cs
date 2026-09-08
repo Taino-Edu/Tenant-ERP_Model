@@ -14,9 +14,10 @@ public interface IAuthService
 
     /// <summary>
     /// Login rápido via QR Code (Customer).
-    /// Cria o usuário se ainda não existir (baseado no CPF).
+    /// Cria usuário novo; para reutilizar um cadastro exige a sessão do próprio cliente.
     /// </summary>
-    Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request);
+    Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request, Guid? authenticatedCustomerId = null,
+        bool presencaNaMesaVerificada = false);
 
     /// <summary>Renova o AccessToken usando o RefreshToken armazenado.</summary>
     Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request);
@@ -33,11 +34,10 @@ public interface IAuthService
     /// <summary>Valida o token e redefine a senha.</summary>
     Task ResetPasswordAsync(ResetPasswordRequest request);
 
-    /// <summary>Busca cliente por CPF — retorna nome e se já tem senha.</summary>
-    Task<CpfLookupResponse> LookupByCpfAsync(string cpf);
+    // LookupByCpfAsync removido em 2026-09-08 — ver AuthController.
 
-    /// <summary>Ativa conta de cliente existente: define email + senha.</summary>
-    Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request);
+    /// <summary>Ativa uma única vez a conta sem senha do cliente autenticado.</summary>
+    Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request, Guid? authenticatedCustomerId = null);
 
     /// <summary>Login de cliente pelo site (email + senha).</summary>
     Task<AuthResponse> ClientLoginAsync(ClientLoginRequest request);

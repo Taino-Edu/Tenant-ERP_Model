@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { authApi } from '@/lib/api'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { authApi, refreshSession } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
@@ -11,6 +11,14 @@ import {
 } from 'lucide-react'
 
 const STORAGE_KEY = 'mesa-last-user'
+
+/// 409 do quick-login: o servidor achou um cadastro mas não confirmou que é de
+/// quem está pedindo. Código estável no corpo — a mensagem é pro usuário ler,
+/// não pro código comparar.
+function precisaAutenticacao(err: unknown): boolean {
+  return (err as { response?: { data?: { code?: string } } })?.response?.data?.code
+    === 'customer_authentication_required'
+}
 
 interface SavedUser {
   name: string
@@ -64,7 +72,11 @@ export default function MesaPage() {
   const { site, loading: siteLoading } = useSiteConfig()
   const params  = useParams()
   const router  = useRouter()
+  const search  = useSearchParams()
   const mesa    = decodeURIComponent(params.mesa as string)
+  // `?t=` do QR Code impresso — prova (fraca, mas real) de que a pessoa viu o
+  // código na mesa. Ver CardGameStore/Security/MesaQrToken.cs.
+  const mesaToken = search.get('t')
 
   const [step, setStep]             = useState<'quick' | 'form' | 'loading'>('form')
   const [savedUser, setSavedUser]   = useState<SavedUser | null>(null)
@@ -108,6 +120,37 @@ export default function MesaPage() {
     return `***.***.${d.slice(6, 9)}-${d.slice(9)}`
   }
 
+  /**
+   * O servidor só reusa o cadastro de um cliente que ele consegue reconhecer —
+   * identificador cadastral não é credencial, então CPF e WhatsApp sozinhos não
+   * abrem conta de ninguém. Reconhecer significa ler o cookie `accessToken`,
+   * que dura 60 minutos.
+   *
+   * O cliente que volta no dia seguinte, no mesmo celular, chega justamente
+   * assim: sem access token, mas com o `refreshToken` de 30 dias intacto no
+   * navegador. Sem esta renovação ele levava 409 e era mandado pro /entrar, que
+   * pede uma senha que cliente de QR Code nunca definiu — e o /primeiro-acesso
+   * mandava ele de volta pra mesa. Três telas, um círculo, nenhuma saída.
+   *
+   * O interceptor do axios não cobre isso porque só renova em cima de 401, e
+   * `quick-login` é anônimo: a resposta é 409, não 401.
+   *
+   * A renovação vai só no 409, não antes de toda tentativa — cliente novo não
+   * tem sessão nenhuma pra renovar, e pagaria uma ida ao servidor à toa.
+   */
+  async function quickLoginRenovandoSessao(name: string, cpf: string | null, whatsApp: string) {
+    try {
+      return await authApi.quickLogin(name, cpf, whatsApp, mesa, mesaToken)
+    } catch (err) {
+      if (!precisaAutenticacao(err)) throw err
+      // Sem refresh token válido (mais de 30 dias, ou outro celular) não há o
+      // que renovar: devolve o 409 original pro fluxo de baixo tratar. Quem
+      // escaneou o QR impresso ainda tem a saída do token, tratada no servidor.
+      try { await refreshSession() } catch { throw err }
+      return authApi.quickLogin(name, cpf, whatsApp, mesa, mesaToken)
+    }
+  }
+
   async function handleLogin(isQuick = false) {
     const requestCpfRaw   = isQuick ? savedUser!.cpf : cpf.replace(/\D/g, '')
     const requestCpf      = requestCpfRaw || null  // null quando não informado
@@ -121,7 +164,7 @@ export default function MesaPage() {
 
     setStep('loading')
     try {
-      const { data } = await authApi.quickLogin(requestName, requestCpf, requestWhatsApp, mesa)
+      const { data } = await quickLoginRenovandoSessao(requestName, requestCpf, requestWhatsApp)
       saveAuth(data)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         name: requestName, cpf: requestCpf, whatsApp: requestWhatsApp,
@@ -130,6 +173,14 @@ export default function MesaPage() {
       toast.success('Entrada autorizada! Boas compras.', { icon: '🏰' })
       setTimeout(() => router.push('/cliente'), 800)
     } catch (err: any) {
+      // Chegou aqui com 409 significa que nem a renovação salvou: refresh token
+      // vencido (mais de 30 dias) ou outro celular. Aí o /entrar é o caminho
+      // certo mesmo — para quem tem senha.
+      if (precisaAutenticacao(err)) {
+        toast.error(err.response?.data?.message || 'Entre na sua conta ou procure a equipe da loja.')
+        router.push('/entrar?returnTo=' + encodeURIComponent('/mesa/' + encodeURIComponent(mesa)))
+        return
+      }
       setStep(isQuick ? 'quick' : 'form')
       toast.error(err.response?.data?.message || 'Erro ao realizar login rápido.')
     }
@@ -139,9 +190,21 @@ export default function MesaPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-center">
         <div className="max-w-md rounded-3xl border border-white/10 bg-white/5 p-8">
+          {/*
+            Dizia "Comandas indisponíveis", e isso estava errado: comanda é a
+            conta aberta do cliente e faz parte do PLANO BASE — o
+            ComandaController não tem [RequireModule] justamente por isso
+            (ver RB-05). O que o módulo Restaurante gateia é o autoatendimento
+            por QR Code na mesa, que é esta tela. A loja sem o módulo continua
+            abrindo e fechando comanda normalmente pelo balcão; só não tem mesa
+            com QR Code. A mensagem antiga fazia parecer que o recurso do plano
+            base tinha sido tirado.
+          */}
           <UtensilsCrossed className="w-10 h-10 text-white/40 mx-auto mb-4" />
-          <h1 className="text-xl font-black text-white">Comandas indisponíveis</h1>
-          <p className="text-sm text-white/55 mt-2">O módulo Restaurante não está habilitado nesta loja.</p>
+          <h1 className="text-xl font-black text-white">Autoatendimento indisponível</h1>
+          <p className="text-sm text-white/55 mt-2">
+            Esta loja não usa QR Code na mesa. Peça sua comanda direto no balcão.
+          </p>
           <button type="button" onClick={() => router.push('/')} className="mt-6 px-5 py-3 rounded-xl bg-white text-slate-900 font-bold text-sm">
             Voltar para a loja
           </button>

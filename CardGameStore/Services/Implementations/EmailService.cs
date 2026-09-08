@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // EmailService.cs — Envio de emails via SMTP
 //
 // Configuração (appsettings.json ou variáveis de ambiente):
@@ -176,7 +176,7 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Código de confirmação da parceria", body);
     }
 
-    public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento)
+    public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento, bool requireDelivery = false)
     {
         var cfg  = await GetSiteConfigAsync();
         var venc = vencimento.ToLocalTime().ToString("dd/MM/yyyy");
@@ -206,7 +206,7 @@ public class EmailService : IEmailService
             </div>
             """;
 
-        await SendAsync(toEmail, toName, $"Crediário aberto — R$ {valor:N2} vence em {venc}", body);
+        await SendAsync(toEmail, toName, $"Crediário aberto — R$ {valor:N2} vence em {venc}", body, requireDelivery);
     }
 
     public async Task SendCrediarioPagoAsync(string toEmail, string toName, decimal valor)
@@ -580,11 +580,12 @@ public class EmailService : IEmailService
         }
     }
 
-    private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
+    private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody, bool requireDelivery = false)
     {
         var smtp = await ResolveSmtpSettingsAsync();
         if (smtp is null)
         {
+            if (requireDelivery) throw new InvalidOperationException("SMTP não configurado para entrega pendente.");
             _logger.LogWarning(
                 "EmailService: SmtpSettings não configurado. Email para {To} ('{Subject}') não foi enviado.",
                 toEmail, subject);
@@ -609,11 +610,13 @@ public class EmailService : IEmailService
             };
             msg.To.Add(new MailAddress(toEmail, toName));
 
-            await client.SendMailAsync(msg);
+            using var deliveryTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            await client.SendMailAsync(msg, deliveryTimeout.Token);
             _logger.LogInformation("Email '{Subject}' enviado para {To}", subject, toEmail);
         }
         catch (Exception ex)
         {
+            if (requireDelivery) throw;
             // Falha de email não derruba o fluxo principal
             _logger.LogError(ex, "Falha ao enviar email '{Subject}' para {To}", subject, toEmail);
         }

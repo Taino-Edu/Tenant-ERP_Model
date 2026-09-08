@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -31,6 +31,9 @@ public class ComandaService : IComandaService
         _tenant       = tenant;
     }
 
+    private IClientProxy SafeGroup(string name) =>
+        new CardGameStore.Hubs.BestEffortClientProxy(_hub.Clients.Group(name), _logger);
+
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
         // Verifica se já existe uma comanda aberta ou em andamento para este usuário.
@@ -53,7 +56,7 @@ public class ComandaService : IComandaService
                 await _db.SaveChangesAsync();
                 
                 // Notifica o admin que a mesa da comanda mudou
-                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+                await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comandaExistente.Id,
@@ -82,7 +85,7 @@ public class ComandaService : IComandaService
         _logger.LogInformation("Comanda {Id} aberta para usuário {UserId}", comanda.Id, userId);
 
         // Notifica o cliente (User_{userId}) que a comanda foi aberta pelo admin
-        await _hub.Clients.Group(ComandaHub.GetUserGroup(_tenant.TenantId, userId))
+        await SafeGroup(ComandaHub.GetUserGroup(_tenant.TenantId, userId))
             .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, TableIdentifier = comanda.TableIdentifier });
 
         // Notifica o admin (dashboard)
@@ -90,7 +93,7 @@ public class ComandaService : IComandaService
             .Where(u => u.Id == userId)
             .Select(u => u.Name)
             .FirstOrDefaultAsync() ?? string.Empty;
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, UserId = userId, UserName = userName, TableIdentifier = comanda.TableIdentifier });
 
         return MapToDto(comanda);
@@ -175,7 +178,7 @@ public class ComandaService : IComandaService
                     await transaction.CommitAsync();
                 });
 
-                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+                await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comanda.Id,
@@ -227,7 +230,7 @@ public class ComandaService : IComandaService
         });
 
         // Notifica o admin sobre o item adicionado pelo cliente
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = comanda.Id,
@@ -279,9 +282,9 @@ public class ComandaService : IComandaService
                     await transaction.CommitAsync();
                 });
 
-                await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+                await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
                     .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
-                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+                await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comanda.Id,
@@ -330,14 +333,14 @@ public class ComandaService : IComandaService
         });
 
         // Notifica o cliente na comanda que o admin adicionou um item
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ItemAddedByAdmin", new
             {
                 ItemName        = item.ItemNameSnapshot,
                 NewTotalInReais = comanda.TotalInReais,
             });
         // Notifica o admin (outros painéis)
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = comanda.Id,
@@ -404,9 +407,9 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da remoção
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = dto.Id,
@@ -483,9 +486,9 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da atualização de quantidade
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = dto.Id,
@@ -667,36 +670,13 @@ public class ComandaService : IComandaService
 
                 if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
                 {
-                    var emailAddr  = comanda.User.Email;
-                    var userName   = comanda.User.Name;
-                    var valorReais = crediario.ValorEmReais;
-                    var venc       = vencimento;
-                    // M7: captura o tenant ANTES do Task.Run — o scope novo não herda o
-                    // ITenantContext da requisição. Sem propagar, EmailService lia
-                    // EmailConfigs/SiteConfigs do schema "public" (SMTP e branding errados);
-                    // com o fail-fast do TenantConnectionInterceptor (C3) isso agora quebraria
-                    // (silenciosamente, dentro de um Task.Run não observado) em vez de vazar dado.
-                    var tenantId        = _tenant.TenantId;
-                    var tenantSchema    = _tenant.SchemaName;
-                    var tenantModules   = _tenant.EnabledModules;
-                    _ = Task.Run(async () =>
+                    // Persistido no mesmo SaveChanges da comanda e do crediário.
+                    // O worker só enxerga o evento depois da confirmação no banco.
+                    _db.CrediarioEmailOutbox.Add(new CrediarioEmailOutbox
                     {
-                        try
-                        {
-                            using var scope  = _scopeFactory.CreateScope();
-                            scope.ServiceProvider.GetRequiredService<ITenantContext>()
-                                .Set(tenantId, tenantSchema, tenantModules);
-                            var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                            await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
-                        }
-                        catch (Exception ex)
-                        {
-                            // M7: exceção aqui antes desaparecia (Task.Run fire-and-forget, ninguém
-                            // observa) — loga em vez de falhar silenciosamente sem nenhum rastro.
-                            _logger.LogError(ex,
-                                "Falha ao enviar e-mail de crediário aberto pra {Email} (tenant {TenantId}).",
-                                emailAddr, tenantId);
-                        }
+                        Id = crediario.Id, ToEmail = comanda.User.Email,
+                        ToName = comanda.User.Name, Valor = crediario.ValorEmReais,
+                        Vencimento = vencimento
                     });
                 }
             }
@@ -818,10 +798,10 @@ public class ComandaService : IComandaService
         dto.NotaFiscalStatus          = nota?.Status.ToString();
         dto.NotaFiscalMotivoRejeicao  = nota?.MotivoRejeicao;
         // Notifica o cliente que a comanda foi fechada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });
         // Notifica o admin
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaClosed", new
             {
                 ComandaId     = comandaId,
@@ -900,10 +880,10 @@ public class ComandaService : IComandaService
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
 
         // Notifica o cliente que a comanda foi cancelada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId });
         // Notifica o admin
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId, UserId = comanda.UserId });
 
         return MapToDto(comanda);
@@ -999,10 +979,10 @@ public class ComandaService : IComandaService
         var dto = MapToDto(comanda);
 
         // Notifica o cliente que os pontos foram removidos
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
+        await SafeGroup(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         // Notifica o admin (dashboard)
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId  = dto.Id,
@@ -1347,7 +1327,7 @@ public class ComandaService : IComandaService
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
-        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId)).SendAsync("ComandaAtualizada", comandaId);
+        await SafeGroup(ComandaHub.GetAdminGroup(_tenant.TenantId)).SendAsync("ComandaAtualizada", comandaId);
 
         // Recarrega com User para o MapToDto
         var updated = await _db.Comandas

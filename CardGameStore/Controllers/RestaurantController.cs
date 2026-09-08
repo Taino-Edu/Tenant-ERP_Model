@@ -37,6 +37,37 @@ public class RestaurantController : ControllerBase
         _tenant = tenant;
     }
 
+    /// <summary>
+    /// Token que vai na URL do QR Code de cada mesa (ver Security/MesaQrToken.cs).
+    /// A tela de QR Codes chama isto pra montar `/mesa/{nome}?t={token}`.
+    /// </summary>
+    /// <param name="mesas">Nomes das mesas, um por item repetido na query string.</param>
+    /// <remarks>
+    /// Exige a permissão de QR Codes, e não a de Restaurante da classe: quem monta
+    /// as mesas nem sempre é quem opera a produção. O token é derivado do tenant
+    /// resolvido no servidor — nenhum tenant consegue pedir o token de outro.
+    /// </remarks>
+    [HttpGet("mesas/qr-tokens")]
+    [RequireOperatorPermission(Permissao.QrCodes)]
+    [ProducesResponseType(typeof(Dictionary<string, string>), 200)]
+    public IActionResult GetMesaQrTokens([FromQuery(Name = "mesa")] string[] mesas)
+    {
+        if (mesas is null || mesas.Length == 0)
+            return BadRequest(new { Message = "Informe ao menos uma mesa." });
+        if (mesas.Length > 200)
+            return BadRequest(new { Message = "No máximo 200 mesas por chamada." });
+
+        var secret = Security.MesaQrToken.ResolveSecret(
+            HttpContext.RequestServices.GetRequiredService<IConfiguration>());
+
+        var tokens = mesas
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(m => m, m => Security.MesaQrToken.Compute(_tenant.TenantId, m, secret), StringComparer.Ordinal);
+
+        return Ok(tokens);
+    }
+
     [HttpGet("areas-producao")]
     public async Task<ActionResult<IReadOnlyList<RestaurantProductionAreaDto>>> ListProductionAreas(
         [FromQuery] bool includeInactive = false)

@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // IEmailService.cs — Contrato de envio de emails do sistema
 // =============================================================================
 
@@ -37,7 +37,7 @@ public interface IEmailService
     // ── Crediário ─────────────────────────────────────────────────────────────
 
     /// <summary>Notifica o cliente que uma comanda foi lançada no crediário.</summary>
-    Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento);
+    Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento, bool requireDelivery = false);
 
     /// <summary>Notifica o cliente que seu crediário foi quitado.</summary>
     Task SendCrediarioPagoAsync(string toEmail, string toName, decimal valor);

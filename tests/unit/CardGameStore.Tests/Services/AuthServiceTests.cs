@@ -9,6 +9,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
+using CardGameStore.Security;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
@@ -24,6 +25,142 @@ namespace CardGameStore.Tests.Services;
 
 public class AuthServiceTests
 {
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("Operator", true)]
+    [InlineData("Customer", false)]
+    [InlineData("Customer", true)]
+    public async Task QuickLogin_ExistingIdentityRequiresOwnActiveCustomerSession(string role, bool active)
+    {
+        using var db = CreateAuthServiceDb();
+        var user = new User { Name = "Original", Cpf = "52998224725", WhatsApp = "11911111111", Role = role, IsActive = active };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+        var request = new QuickLoginRequest("Impostor", user.Cpf, "11922222222");
+        await FluentActions.Awaiting(() => service.QuickLoginAsync(request)).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => service.QuickLoginAsync(request, Guid.NewGuid())).Should().ThrowAsync<InvalidOperationException>();
+        if (role != "Customer" || !active)
+            await FluentActions.Awaiting(() => service.QuickLoginAsync(request, user.Id)).Should().ThrowAsync<InvalidOperationException>();
+        (await db.Comandas.CountAsync()).Should().Be(0);
+        await db.Entry(user).ReloadAsync();
+        user.Name.Should().Be("Original");
+        user.WhatsApp.Should().Be("11911111111");
+        user.RefreshToken.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A retomada existe pra devolver a conta a quem perdeu o celular, e depende
+    /// das DUAS condições juntas. Este teste fixa a combinação: sem o token do QR
+    /// não retoma (senão bastaria saber um CPF, de qualquer lugar), e com senha
+    /// não retoma (a conta já tem credencial própria — o caminho dela é o login).
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false)] // sem token, sem senha  → não retoma
+    [InlineData(false, true,  false)] // sem token, com senha  → não retoma
+    [InlineData(true,  true,  false)] // com token, com senha  → não retoma
+    [InlineData(true,  false, true )] // com token, sem senha  → RETOMA
+    public async Task QuickLogin_RetomadaExigeTokenDoQrEContaSemSenha(
+        bool comTokenDaMesa, bool contaTemSenha, bool deveRetomar)
+    {
+        using var db = CreateAuthServiceDb();
+        var user = new User
+        {
+            Name = "Cliente Antigo", Cpf = "52998224725", WhatsApp = "11911111111",
+            Role = UserRole.Customer, IsActive = true,
+            PasswordHash = contaTemSenha ? BCrypt.Net.BCrypt.HashPassword("senhaForte123") : null,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var service = CreateAuthService(db);
+        // Celular novo: nenhuma sessão autenticada, só o QR impresso na mesa.
+        var request = new QuickLoginRequest("Cliente Antigo", user.Cpf, "11911111111", "Mesa-01");
+
+        if (deveRetomar)
+        {
+            var resposta = await service.QuickLoginAsync(request, null, comTokenDaMesa);
+            resposta.UserId.Should().Be(user.Id, "a retomada devolve a MESMA conta, com pontos e histórico");
+        }
+        else
+        {
+            await FluentActions
+                .Awaiting(() => service.QuickLoginAsync(request, null, comTokenDaMesa))
+                .Should().ThrowAsync<InvalidOperationException>();
+            (await db.Comandas.CountAsync()).Should().Be(0);
+        }
+    }
+
+    /// <summary>
+    /// O token é derivado do tenant e do nome da mesa: um QR de outra loja, ou de
+    /// outra mesa, não vale aqui. Sem isso, imprimir um QR próprio daria acesso a
+    /// contas sem senha de qualquer loja da plataforma.
+    /// </summary>
+    [Fact]
+    public void MesaQrToken_NaoValeEntreLojasNemEntreMesas()
+    {
+        const string segredo = "segredo-de-teste-1234567890";
+        var lojaA = Guid.NewGuid();
+        var lojaB = Guid.NewGuid();
+        var tokenLojaAMesa1 = MesaQrToken.Compute(lojaA, "Mesa-01", segredo);
+
+        MesaQrToken.Verify(lojaA, "Mesa-01", tokenLojaAMesa1, segredo).Should().BeTrue();
+        MesaQrToken.Verify(lojaB, "Mesa-01", tokenLojaAMesa1, segredo).Should().BeFalse("outra loja");
+        MesaQrToken.Verify(lojaA, "Mesa-02", tokenLojaAMesa1, segredo).Should().BeFalse("outra mesa");
+        MesaQrToken.Verify(lojaA, "Mesa-01", tokenLojaAMesa1, "outro-segredo").Should().BeFalse("segredo trocado");
+        MesaQrToken.Verify(lojaA, "Mesa-01", null, segredo).Should().BeFalse("sem token");
+        MesaQrToken.Verify(lojaA, null, tokenLojaAMesa1, segredo).Should().BeFalse("sem mesa");
+
+        // "1" + "2" não pode virar o mesmo dado de "12" + "": o separador \n
+        // impede que mesas com nomes concatenáveis compartilhem token.
+        MesaQrToken.Compute(lojaA, "1", segredo).Should().NotBe(MesaQrToken.Compute(lojaA, "12", segredo));
+    }
+
+    [Fact]
+    public async Task QuickLogin_PhoneOnlyCannotAuthenticateExistingAdmin()
+    {
+        using var db = CreateAuthServiceDb();
+        db.Users.Add(new User { Name = "Admin", WhatsApp = "11911111111", Role = UserRole.Admin, IsActive = true });
+        await db.SaveChangesAsync();
+        await FluentActions.Awaiting(() => CreateAuthService(db).QuickLoginAsync(
+            new QuickLoginRequest("Visitor", null, "11911111111"))).Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("Admin", false)]
+    [InlineData("Customer", true)]
+    public async Task SetupAccount_DoesNotReplaceExistingPasswordOrActivateStaff(string role, bool hasPassword)
+    {
+        using var db = CreateAuthServiceDb();
+        var user = new User { Name = "Original", Cpf = "52998224725", Role = role, IsActive = true,
+            Email = "original@example.test", PasswordHash = hasPassword ? "original-hash" : null };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var request = new SetupAccountRequest(user.Cpf, "changed@example.test", "new-password");
+        await FluentActions.Awaiting(() => CreateAuthService(db).SetupAccountAsync(request, user.Id))
+            .Should().ThrowAsync<InvalidOperationException>();
+        await db.Entry(user).ReloadAsync();
+        user.Email.Should().Be("original@example.test");
+        user.PasswordHash.Should().Be(hasPassword ? "original-hash" : null);
+    }
+
+    [Fact]
+    public async Task SetupAccount_OnlyOwnSessionCanActivateOnce()
+    {
+        using var db = CreateAuthServiceDb();
+        var user = new User { Name = "Customer", Cpf = "52998224725", Role = UserRole.Customer, IsActive = true };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+        var request = new SetupAccountRequest(user.Cpf, "customer@example.test", "new-password");
+        await FluentActions.Awaiting(() => service.SetupAccountAsync(request)).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => service.SetupAccountAsync(request, Guid.NewGuid())).Should().ThrowAsync<InvalidOperationException>();
+        var response = await service.SetupAccountAsync(request, user.Id);
+        response.Role.Should().Be(UserRole.Customer);
+        await FluentActions.Awaiting(() => service.SetupAccountAsync(request, user.Id)).Should().ThrowAsync<InvalidOperationException>();
+        BCrypt.Net.BCrypt.Verify("new-password", user.PasswordHash).Should().BeTrue();
+    }
+
     private static AppDbContext CreateInMemoryDb(string dbName) => TestDbFactory.Create(dbName);
 
     // Segundo schema isolado (ver TestDbFactory) pros testes que usam o
@@ -314,8 +451,9 @@ public class AuthServiceTests
         // Act — duas chamadas com o mesmo CPF
         await service.QuickLoginAsync(new QuickLoginRequest(
             Name: "Primeira Vez", Cpf: cpf, WhatsApp: "11900000001"));
+        var id = await db.Users.Where(u => u.Cpf == cpf).Select(u => u.Id).SingleAsync();
         await service.QuickLoginAsync(new QuickLoginRequest(
-            Name: "Segunda Vez",  Cpf: cpf, WhatsApp: "11900000001"));
+            Name: "Segunda Vez", Cpf: cpf, WhatsApp: "11900000001"), id);
 
         // Assert — apenas um usuário com esse CPF
         var count = await db.Users.CountAsync(u => u.Cpf == cpf);

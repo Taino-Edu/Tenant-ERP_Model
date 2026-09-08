@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // Program.cs — Ponto de entrada e configuração central da aplicação
 // Padrão: Minimal API (.NET 8+), sem Startup.cs separado
 // =============================================================================
@@ -146,9 +146,14 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
     // instância de ITenantContext que o TenantResolutionMiddleware populou
     // nesta requisição, não uma nova.
+    // As credenciais entram aqui pro interceptor poder realinhar o papel do
+    // PostgreSQL na ABERTURA da conexão. A connection string acima é resolvida
+    // uma vez, na criação do DbContext no escopo, e no SignalR isso acontece
+    // antes de o TenantHubFilter definir o tenant — ver AlignCredentials.
     options.AddInterceptors(new TenantConnectionInterceptor(
         sp.GetRequiredService<ITenantContext>(),
-        sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
+        sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>(),
+        sp.GetRequiredService<TenantDatabaseCredentials>()));
 
     // Diff automático de auditoria (Product/VendaAvulsa/User).
     options.AddInterceptors(new AuditSaveChangesInterceptor(
@@ -453,6 +458,7 @@ builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();
+builder.Services.AddHostedService<CrediarioEmailBackgroundService>();
 builder.Services.AddHostedService<SefazDistBackgroundService>();
 
 // ---------------------------------------------------------------------------
@@ -962,10 +968,11 @@ app.ValidateIntegrationScopeCoverage();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).
-// Exige o mesmo JWT do painel admin: sem AdminOnly, qualquer um com a URL
+// Exige sessão de Admin; Operator não tem ainda autorização por ferramenta.
+// Sem autenticação, qualquer um com a URL
 // leria estoque, faturamento e crediário da loja. O tenant já foi resolvido
 // pelo middleware, então as tools operam no schema certo automaticamente.
-app.MapMcp("/mcp").RequireAuthorization("AdminOnly");
+app.MapMcp("/mcp").RequireAuthorization(McpAccess.Policy);
 
 // /health — sem autenticação, sem rate limit
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

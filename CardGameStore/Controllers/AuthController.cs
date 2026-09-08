@@ -66,6 +66,9 @@ public class AuthController : ControllerBase
     // HELPERS — Cookies HttpOnly (LGPD / Segurança)
     // =========================================================================
 
+    private Guid? AuthenticatedCustomerId() =>
+        CardGameStore.Security.CustomerSessionIdentity.Resolve(User, _tenant.TenantId);
+
     /// <summary>
     /// Grava accessToken e refreshToken como cookies HttpOnly,
     /// impedindo acesso via JavaScript (proteção contra XSS).
@@ -315,13 +318,21 @@ public class AuthController : ControllerBase
 
         try
         {
-            var response = await _authService.QuickLoginAsync(request);
+            var presencaNaMesa = CardGameStore.Security.MesaQrToken.Verify(
+                _tenant.TenantId, request.TableIdentifier, request.MesaToken,
+                CardGameStore.Security.MesaQrToken.ResolveSecret(_config));
+
+            var response = await _authService.QuickLoginAsync(request, AuthenticatedCustomerId(), presencaNaMesa);
             // LGPD: CPF removido do log — apenas nome e mesa são necessários para auditoria
             _logger.LogInformation(
                 "Quick-login realizado: {Name} | Mesa: {Table} | Comanda: {ComandaId}",
                 request.Name, request.TableIdentifier, response.ComandaId);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, response.ComandaId, response.Permissions));
+        }
+        catch (CustomerAuthenticationRequiredException ex)
+        {
+            return Conflict(new { message = ex.Message, code = "customer_authentication_required" });
         }
         catch (ArgumentException ex)
         {
@@ -390,28 +401,24 @@ public class AuthController : ControllerBase
     // ACESSO DO CLIENTE PELO SITE
     // =========================================================================
 
-    /// <summary>
-    /// Busca um cliente pelo CPF pra saber se já tem cadastro (e nesse caso, se
-    /// precisa só de senha ou de conta nova) antes do fluxo de login/cadastro
-    /// pela área do cliente. 404 se o CPF não tem nenhum registro.
-    /// </summary>
-    [HttpPost("cpf-lookup")]
-    [AllowAnonymous]
-    [EnableRateLimiting("auth")]
-    public async Task<IActionResult> CpfLookup([FromBody] CpfLookupRequest request)
-    {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-        try
-        {
-            var result = await _authService.LookupByCpfAsync(request.Cpf);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
-    }
+    // POST /api/auth/cpf-lookup foi REMOVIDO em 2026-09-08.
+    //
+    // Ele era anônimo e devolvia o NOME do cliente para qualquer CPF existente
+    // na loja — vazamento de dado pessoal e oráculo de enumeração de CPF (o
+    // rate limit atrasa, não impede). Existia só para a tela /primeiro-acesso
+    // decidir entre "criar senha" e "fazer login", e essa decisão sumiu junto
+    // com o motivo: depois que a ativação passou a exigir sessão do próprio
+    // cliente (ver SetupAccount abaixo), quem não tem sessão não tem o que
+    // fazer com a resposta, e quem tem sessão já é identificado pelo JWT.
+    //
+    // A mesma correção que fechou o quick-login vale aqui: identificador
+    // cadastral não é credencial, e não deve nem confirmar a própria
+    // existência para um solicitante anônimo.
 
     /// <summary>
     /// Ativa a conta de um cliente que já existe (criado via quick-login na mesa)
-    /// mas nunca definiu e-mail/senha — define os dois de uma vez e já retorna
+    /// mas nunca definiu e-mail/senha, exigindo sessão do próprio cliente no tenant.
+    /// Define os dois de uma vez e já retorna
     /// login efetuado. 404 se o CPF não existe, 409 se o e-mail já está em uso.
     /// </summary>
     [HttpPost("setup-account")]
@@ -422,7 +429,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
-            var response = await _authService.SetupAccountAsync(request);
+            var response = await _authService.SetupAccountAsync(request, AuthenticatedCustomerId());
             SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
         }

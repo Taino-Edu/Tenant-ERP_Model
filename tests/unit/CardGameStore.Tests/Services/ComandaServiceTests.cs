@@ -91,6 +91,25 @@ public class ComandaServiceTests
         return (user, product, comanda);
     }
 
+    [Fact]
+    public async Task CloseComanda_CrediarioPersistsDeliveryIntentWithBusinessData()
+    {
+        using var db = CreateDb(nameof(CloseComanda_CrediarioPersistsDeliveryIntentWithBusinessData));
+        var (user, product, comanda) = await SeedAsync(db);
+        user.Email = "customer@example.test";
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+        await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Crediario");
+        var debt = await db.Crediarios.SingleAsync();
+        var delivery = await db.CrediarioEmailOutbox.SingleAsync();
+        delivery.Id.Should().Be(debt.Id);
+        delivery.Valor.Should().Be(debt.ValorEmReais);
+        delivery.ToEmail.Should().Be(user.Email);
+        delivery.SentAt.Should().BeNull();
+        comanda.Status.Should().Be(ComandaStatus.Fechada);
+    }
+
     // ── Abrir comanda ─────────────────────────────────────────────────────────
 
     [Fact]

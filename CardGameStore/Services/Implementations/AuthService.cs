@@ -132,7 +132,17 @@ public class AuthService : IAuthService
     // =========================================================================
     // LOGIN RÁPIDO — Customer via QR Code (CPF + WhatsApp)
     // =========================================================================
-    public async Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request)
+    /// <param name="request">Nome, CPF/WhatsApp, mesa e o token do QR.</param>
+    /// <param name="authenticatedCustomerId">
+    /// Cliente já autenticado nesta loja, quando houver sessão válida.
+    /// </param>
+    /// <param name="presencaNaMesaVerificada">
+    /// O token do QR bateu com esta mesa nesta loja. Quem verifica é o
+    /// controller — a conferência do HMAC não é regra de negócio, e mantê-la
+    /// fora daqui deixa esta decisão testável sem segredo nenhum.
+    /// </param>
+    public async Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request, Guid? authenticatedCustomerId = null,
+        bool presencaNaMesaVerificada = false)
     {
         // Continua gateado: esse login é a entrada do cliente pelo QR Code da mesa,
         // que é operação de salão. A comanda em si é plano base (ver ComandaController),
@@ -143,44 +153,64 @@ public class AuthService : IAuthService
         var cpf = request.Cpf?.Trim();
         var hasCpf = !string.IsNullOrEmpty(cpf);
 
-        // Busca por CPF (preferido) ou WhatsApp quando CPF não informado
-        var user = hasCpf
-            ? await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf)
-            : await _db.Users.FirstOrDefaultAsync(u => u.WhatsApp == request.WhatsApp && u.IsActive);
-
-        if (user == null)
+        // Identificadores cadastrais não são credenciais. Nunca assumir uma
+        // conta existente só porque o solicitante conhece CPF ou telefone.
+        var matches = await _db.Users.Where(u =>
+            (hasCpf && u.Cpf == cpf) || u.WhatsApp == request.WhatsApp).ToListAsync();
+        if (matches.Count > 1)
+            throw new CustomerAuthenticationRequiredException("Não foi possível confirmar o cadastro. Procure a equipe da loja.");
+        var user = matches.SingleOrDefault();
+        if (user is not null)
         {
-            user = new User
-            {
-                Name     = request.Name,
-                Cpf      = hasCpf ? cpf : null,
-                WhatsApp = request.WhatsApp,
-                Role     = UserRole.Customer,
-                IsActive = true
-            };
-            _db.Users.Add(user);
-            _logger.LogInformation("Novo cliente criado via QR Code: {Name}", request.Name);
+            if (!user.IsActive || user.Role != UserRole.Customer)
+                throw new CustomerAuthenticationRequiredException("Entre na sua conta para continuar. Se ainda não tem senha, procure a equipe da loja.");
+
+            var ehODono = user.Id == authenticatedCustomerId;
+
+            // Retomada de conta sem senha, provada pelo token do QR impresso.
+            //
+            // Existe porque a conta criada no QR Code nasce sem e-mail e sem
+            // senha: ela vive enquanto o navegador daquele celular lembrar dela.
+            // Trocou de aparelho, limpou o navegador ou passou dos 30 dias do
+            // refresh token, e o cliente perdia pontos, saldo e histórico sem
+            // nenhum caminho de volta — nem "esqueci minha senha", que precisa
+            // de um e-mail que ele não tem.
+            //
+            // As duas condições são inseparáveis:
+            //  - SEM SENHA: conta com senha nunca é retomada assim. Ela tem
+            //    credencial própria, e o caminho dela é o login.
+            //  - COM O TOKEN DO QR: sem isso, "estar na loja" seria só digitar
+            //    uma URL adivinhável, e a retomada viraria sequestro de conta —
+            //    incluindo comprar fiado no crediário da vítima.
+            var podeRetomar = user.PasswordHash == null && presencaNaMesaVerificada;
+
+            if (!ehODono && !podeRetomar)
+                throw new CustomerAuthenticationRequiredException("Entre na sua conta para continuar. Se ainda não tem senha, procure a equipe da loja.");
+
+            if (!ehODono)
+                _logger.LogInformation(
+                    "Conta sem senha retomada pelo QR Code da mesa {Mesa} — cliente {UserId}.",
+                    request.TableIdentifier, user.Id);
+            // Nome e telefone existentes não são alterados pelo login.
         }
         else
         {
-            user.Name      = request.Name;
-            user.WhatsApp  = request.WhatsApp;
-            // Preenche CPF caso tenha sido informado agora e estava vazio
-            if (hasCpf && user.Cpf == null) user.Cpf = cpf;
-            user.UpdatedAt = DateTime.UtcNow;
-        }
-
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            _db.ChangeTracker.Clear();
-            user = hasCpf
-                ? await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf && u.IsActive)
-                : await _db.Users.FirstOrDefaultAsync(u => u.WhatsApp == request.WhatsApp && u.IsActive);
-            if (user == null) throw;
+            user = new User
+            {
+                Name = request.Name, Cpf = hasCpf ? cpf : null,
+                WhatsApp = request.WhatsApp, Role = UserRole.Customer, IsActive = true
+            };
+            _db.Users.Add(user);
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException
+                { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation })
+            {
+                _db.ChangeTracker.Clear();
+                throw new CustomerAuthenticationRequiredException("Cadastro já utilizado. Entre na sua conta ou procure a equipe da loja.");
+            }
         }
 
         var comanda = await _comandaService.OpenComandaAsync(user.Id, request.TableIdentifier);
@@ -424,29 +454,32 @@ public class AuthService : IAuthService
     // ACESSO DO CLIENTE PELO SITE
     // =========================================================================
 
-    public async Task<CpfLookupResponse> LookupByCpfAsync(string cpf)
-    {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf && u.IsActive);
-        if (user == null)
-            throw new KeyNotFoundException("CPF não encontrado. Acesse a loja e escaneie o QR Code para criar sua conta.");
+    // LookupByCpfAsync removido em 2026-09-08 junto com POST /api/auth/cpf-lookup:
+    // devolvia o nome do cliente para qualquer CPF, sem autenticação. Ver o
+    // comentário no AuthController.
 
-        return new CpfLookupResponse(user.Name, user.PasswordHash != null);
-    }
-
-    public async Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request)
+    public async Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request, Guid? authenticatedCustomerId = null)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf && u.IsActive);
+        var user = await _db.Users.FirstOrDefaultAsync(u =>
+            u.Id == authenticatedCustomerId && u.Cpf == request.Cpf && u.IsActive &&
+            u.Role == UserRole.Customer && u.PasswordHash == null);
         if (user == null)
-            throw new KeyNotFoundException("CPF não encontrado.");
+            throw new InvalidOperationException("A ativação exige a sessão do próprio cliente e uma conta ainda sem senha. Entre na conta ou procure a equipe da loja.");
 
         var emailInUse = await _db.Users.AnyAsync(u => u.Email == request.Email.ToLowerInvariant() && u.Id != user.Id);
         if (emailInUse)
             throw new InvalidOperationException("Este e-mail já está em uso por outra conta.");
 
-        user.Email        = request.Email.ToLowerInvariant();
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-        user.UpdatedAt    = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        var updated = await _db.Users.Where(u => u.Id == user.Id && u.IsActive &&
+                u.Role == UserRole.Customer && u.PasswordHash == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(u => u.Email, request.Email.Trim().ToLowerInvariant())
+                .SetProperty(u => u.PasswordHash, passwordHash)
+                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+        if (updated != 1)
+            throw new InvalidOperationException("Esta conta já foi ativada. Use o login ou recupere sua senha.");
+        await _db.Entry(user).ReloadAsync();
 
         _logger.LogInformation("Conta ativada para cliente {Name}", user.Name);
         return await GenerateAuthResponseAsync(user);
@@ -670,3 +703,5 @@ public class WrongDomainLoginException : Exception
 {
     public WrongDomainLoginException(string message) : base(message) { }
 }
+
+public sealed class CustomerAuthenticationRequiredException(string message) : InvalidOperationException(message);

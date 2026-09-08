@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // AppDbContext.cs — Contexto do Entity Framework Core (PostgreSQL)
 // Configura mapeamentos, índices, conversões e seeds iniciais.
 // =============================================================================
@@ -16,6 +16,8 @@ namespace CardGameStore.Data;
 /// </summary>
 public class AppDbContext : DbContext
 {
+    public DbSet<CrediarioEmailOutbox> CrediarioEmailOutbox { get; set; }
+
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     // -------------------------------------------------------------------------
@@ -395,6 +397,8 @@ public class AppDbContext : DbContext
         // =====================================================================
         // CREDIARIO
         // =====================================================================
+        modelBuilder.Entity<CrediarioEmailOutbox>().HasIndex(e => e.NextAttemptAt)
+            .HasFilter("\"SentAt\" IS NULL");
         modelBuilder.Entity<Crediario>(entity =>
         {
             entity.Property(c => c.Status)

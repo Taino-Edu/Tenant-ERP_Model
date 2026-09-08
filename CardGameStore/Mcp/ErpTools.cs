@@ -51,29 +51,21 @@ public sealed class ErpTools
         IVendaAvulsaService vendas,
         CancellationToken ct = default)
     {
-        var hoje = DateTime.UtcNow.Date;
-
-        // (long) no Sum, não (decimal): o valor é armazenado em centavos (int) e
-        // a soma de muitas linhas estoura int32 — o cast promove a agregação pra
-        // bigint no próprio banco. Converte pra reais depois, em memória.
-        var totalComandas = await db.Comandas
-            .Where(c => c.ClosedAt >= hoje && c.Status == ComandaStatus.Fechada)
-            .SumAsync(c => (long)c.TotalInCents, ct);
-
-        var qtdComandas = await db.Comandas
-            .CountAsync(c => c.ClosedAt >= hoje && c.Status == ComandaStatus.Fechada, ct);
-
-        var avulsas = (await vendas.GetRecentAsync(200))
-            .Where(v => v.SoldAt >= hoje)
-            .ToList();
-
-        var totalAvulsas = avulsas.Sum(v => (long)v.TotalInCents);
+        var (inicio, fim) = CardGameStore.Common.BrazilTime.Dia();
+        var hoje = CardGameStore.Common.BrazilTime.NowBr().Date;
+        var comandas = db.Comandas.Where(c => c.ClosedAt >= inicio && c.ClosedAt < fim
+            && c.Status == ComandaStatus.Fechada);
+        var totalComandas = await comandas.SumAsync(c => (long)c.TotalInCents, ct);
+        var qtdComandas = await comandas.CountAsync(ct);
+        var avulsas = db.VendasAvulsas.Where(v => v.SoldAt >= inicio && v.SoldAt < fim && v.CanceladoEm == null);
+        var totalAvulsas = await avulsas.SumAsync(v => (long)v.TotalInCents, ct);
+        var qtdAvulsas = await avulsas.CountAsync(ct);
 
         return $"""
             Faturamento de hoje ({hoje:dd/MM/yyyy}):
             - Total geral: {Reais(totalComandas + totalAvulsas)}
             - Comandas fechadas: {Reais(totalComandas)} ({qtdComandas} comanda(s))
-            - Vendas avulsas (PDV): {Reais(totalAvulsas)} ({avulsas.Count} venda(s))
+            - Vendas avulsas (PDV): {Reais(totalAvulsas)} ({qtdAvulsas} venda(s))
             """;
     }
 

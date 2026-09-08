@@ -10,7 +10,7 @@ import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
   Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
   Bell,
-  QrCode, Copy, Share2, MessageSquare, Send,
+  QrCode, Copy, Share2, MessageSquare, Send, KeyRound,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -630,6 +630,39 @@ export default function ClientePage() {
 
       {/* ── CONTENT ─────────────────────────────────────────────────── */}
       <main className="max-w-lg mx-auto px-4 py-6 space-y-4 pb-24">
+
+        {/*
+          Convite pra criar senha — só pra quem entrou pelo QR Code e ainda não
+          tem uma.
+
+          Sem senha, a conta existe só enquanto o navegador deste celular
+          lembrar dela: troca de aparelho, limpa o navegador ou passa dos 30
+          dias do refresh token e o cliente perde pontos, saldo e histórico sem
+          ter como provar que a conta é dele — CPF e WhatsApp não são senha, e
+          uma conta criada pelo QR nasce sem e-mail, então nem "esqueci minha
+          senha" alcança ela. Criar a senha é o que transforma a conta em algo
+          recuperável, e é aqui que o cliente descobre isso.
+
+          Fica no topo do conteúdo e não como modal de propósito: é um aviso
+          útil, não um pedágio na frente de quem só quer ver a comanda.
+        */}
+        {profile && !profile.hasPassword && (
+          <Link href="/primeiro-acesso"
+            className="flex items-center gap-3 rounded-2xl p-4 transition hover:brightness-105"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ backgroundColor: C.yellow, color: C.navy }}>
+              <KeyRound className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-black text-sm" style={{ color: C.navy }}>Crie uma senha</p>
+              <p className="text-xs mt-0.5" style={{ color: C.muted }}>
+                Assim você entra de qualquer celular e não perde seus pontos e seu histórico.
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 shrink-0" style={{ color: C.muted }} />
+          </Link>
+        )}
 
         {/* Pontos */}
         {profile && (site.pontosFidelidadeAtivo || profile.balanceInCents > 0) && (

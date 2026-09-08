@@ -105,6 +105,19 @@ public class UserProfileDto
     public bool      PointsExpired   { get; set; }
     public int       BalanceInCents  { get; set; }
     public DateTime  CreatedAt       { get; set; }
+
+    /// <summary>
+    /// Se a conta já tem senha própria. Nunca expõe o hash — só o fato.
+    ///
+    /// Cliente criado pelo QR Code da mesa nasce sem e-mail e sem senha: existe
+    /// enquanto o navegador dele guardar a sessão, e some junto com ela (troca
+    /// de celular, 30 dias, limpar o navegador). É esta flag que deixa a área do
+    /// cliente convidar quem ainda não tem senha a criar uma.
+    ///
+    /// Não dá pra deduzir isso de `Email != null`: um cliente cadastrado pelo
+    /// balcão pode ter e-mail e nenhuma senha.
+    /// </summary>
+    public bool      HasPassword     { get; set; }
 }
 
 /// <summary>Request para ajustar saldo monetário de um usuário (Admin).</summary>

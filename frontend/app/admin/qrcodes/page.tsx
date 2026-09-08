@@ -7,6 +7,7 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { getRole, hasPermission } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { escapeHtml } from '@/lib/html'
+import { restaurantApi } from '@/lib/api'
 
 interface Mesa { id: string; nome: string; url: string; qrDataUrl: string }
 
@@ -44,17 +45,47 @@ export default function QRCodesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl, authorized])
 
+  /**
+   * A URL do QR carrega `?t=<token>` — sem ele, `/mesa/5` é adivinhável por
+   * qualquer um de qualquer lugar, e o servidor não teria como distinguir quem
+   * está na mesa de quem só sabe um CPF. É esse token que permite ao cliente
+   * sem senha retomar a própria conta em outro celular sem abrir a porta pra
+   * sequestro de conta. Ver CardGameStore/Security/MesaQrToken.cs.
+   *
+   * O token é derivado do tenant no servidor, então cada loja tem o seu, e um
+   * QR de uma loja não vale em outra.
+   */
+  async function montarUrls(nomes: string[]): Promise<Record<string, string>> {
+    try {
+      const { data } = await restaurantApi.mesaQrTokens(nomes)
+      return Object.fromEntries(nomes.map(nome => {
+        const token = data[nome]
+        const base  = `${baseUrl}/mesa/${encodeURIComponent(nome)}`
+        return [nome, token ? `${base}?t=${encodeURIComponent(token)}` : base]
+      }))
+    } catch {
+      // Sem token o QR ainda serve pra abrir comanda e criar conta — só não
+      // habilita a retomada de conta sem senha. Melhor um QR que funciona
+      // parcialmente do que a tela inteira falhar na hora de imprimir.
+      toast.error('Não foi possível assinar os QR Codes. Eles funcionam, mas sem recuperação de conta.')
+      return Object.fromEntries(nomes.map(nome => [nome, `${baseUrl}/mesa/${encodeURIComponent(nome)}`]))
+    }
+  }
+
+  async function renderQr(url: string) {
+    return QRCode.toDataURL(url, {
+      width: 400, margin: 2,
+      color: { dark: '#ffffff', light: '#1A1A1F' },
+      errorCorrectionLevel: 'H',
+    })
+  }
+
   async function generateAll(nomes: string[]) {
     setLoading(true)
-    const generated = await Promise.all(nomes.map(async nome => {
-      const url       = `${baseUrl}/mesa/${encodeURIComponent(nome)}`
-      const qrDataUrl = await QRCode.toDataURL(url, {
-        width: 400, margin: 2,
-        color: { dark: '#ffffff', light: '#1A1A1F' },
-        errorCorrectionLevel: 'H',
-      })
-      return { id: nome, nome, url, qrDataUrl }
-    }))
+    const urls = await montarUrls(nomes)
+    const generated = await Promise.all(nomes.map(async nome => ({
+      id: nome, nome, url: urls[nome], qrDataUrl: await renderQr(urls[nome]),
+    })))
     setMesas(generated)
     setLoading(false)
   }
@@ -63,12 +94,9 @@ export default function QRCodesPage() {
     const nome = newNome.trim()
     if (!nome) return
     if (mesas.find(m => m.nome === nome)) { toast.error('Mesa já existe!'); return }
-    const url       = `${baseUrl}/mesa/${encodeURIComponent(nome)}`
-    const qrDataUrl = await QRCode.toDataURL(url, {
-      width: 400, margin: 2,
-      color: { dark: '#ffffff', light: '#1A1A1F' },
-      errorCorrectionLevel: 'H',
-    })
+    const urls      = await montarUrls([nome])
+    const url       = urls[nome]
+    const qrDataUrl = await renderQr(url)
     setMesas(prev => [...prev, { id: nome, nome, url, qrDataUrl }])
     setNewNome('')
     toast.success(`QR Code criado para ${nome}!`)

@@ -52,6 +52,23 @@ async function doRefresh(): Promise<void> {
   await axios.post('/api/auth/refresh', {}, { withCredentials: true })
 }
 
+/**
+ * Renova a sessão sob demanda, reaproveitando o mesmo mutex do interceptor —
+ * duas chamadas concorrentes viram um refresh só.
+ *
+ * Existe porque o interceptor abaixo só renova em cima de um 401, e nem toda
+ * rota que precisa de identidade responde 401 quando ela falta: `quick-login`
+ * é `AllowAnonymous` e responde 409 quando não consegue reconhecer o cliente
+ * (ver app/mesa/[mesa]/page.tsx). Rejeita se não houver refresh token válido;
+ * quem chama decide o que fazer com isso.
+ */
+export function refreshSession(): Promise<void> {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => { refreshPromise = null })
+  }
+  return refreshPromise
+}
+
 // Tenta renovar o token se receber 401
 api.interceptors.response.use(
   (res) => res,
@@ -61,10 +78,7 @@ api.interceptors.response.use(
       original._retry = true
       try {
         // Reutiliza o mesmo promise se já há um refresh em andamento
-        if (!refreshPromise) {
-          refreshPromise = doRefresh().finally(() => { refreshPromise = null })
-        }
-        await refreshPromise
+        await refreshSession()
         // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
       } catch {
@@ -244,6 +258,9 @@ export interface UserProfile {
   cpf: string | null; whatsApp: string | null; role: string; profileImageUrl: string | null
   pointsBalance: number; pointsExpiresAt: string | null
   pointsExpired: boolean; balanceInCents: number; createdAt: string
+  /// Conta já tem senha própria. Falso = cliente que só existe pela sessão do
+  /// navegador (entrou pelo QR Code da mesa e nunca criou senha).
+  hasPassword: boolean
 }
 
 type PrefCorner = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
@@ -286,8 +303,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 
 // ── Funções de API ────────────────────────────────────────────────────────────
 
-export interface CpfLookupResponse { name: string; hasPassword: boolean }
-
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/login', { email, password }),
@@ -295,12 +310,15 @@ export const authApi = {
     api.post<AuthResponse>('/api/auth/client-login', { email, password }),
   register: (name: string, email: string, password: string, whatsApp?: string, cpf?: string) =>
     api.post<AuthResponse>('/api/auth/register', { name, email, password, whatsApp, cpf }),
-  cpfLookup: (cpf: string) =>
-    api.post<CpfLookupResponse>('/api/auth/cpf-lookup', { cpf }),
+  // cpfLookup removido em 2026-09-08 junto com o endpoint: devolvia o nome do
+  // titular para qualquer CPF, sem autenticação. Ver /primeiro-acesso.
   setupAccount: (cpf: string, email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/setup-account', { cpf, email, password }),
-  quickLogin: (name: string, cpf: string | null, whatsApp: string, tableIdentifier?: string) =>
-    api.post<AuthResponse>('/api/auth/quick-login', { name, cpf: cpf || null, whatsApp, tableIdentifier }),
+  // mesaToken vem do `?t=` da URL do QR Code impresso. Só faz diferença quando o
+  // cliente não tem senha e precisa retomar a própria conta em outro celular —
+  // criar conta e reusar a sessão atual não dependem dele.
+  quickLogin: (name: string, cpf: string | null, whatsApp: string, tableIdentifier?: string, mesaToken?: string | null) =>
+    api.post<AuthResponse>('/api/auth/quick-login', { name, cpf: cpf || null, whatsApp, tableIdentifier, mesaToken: mesaToken || null }),
   logout:         () => api.post('/api/auth/logout'),
   forgotPassword: (email: string) =>
     api.post('/api/auth/forgot-password', { email }),
@@ -2610,6 +2628,14 @@ export interface SaveRestaurantProductionAreaRequest {
 }
 
 export const restaurantApi = {
+  /// Tokens que entram na URL de cada QR Code de mesa. Mapa { nomeDaMesa: token }.
+  mesaQrTokens: (mesas: string[]) =>
+    api.get<Record<string, string>>('/api/restaurante/mesas/qr-tokens', {
+      params: { mesa: mesas },
+      // Sem isto o axios manda `mesa[]=1&mesa[]=2` e o binder do ASP.NET não
+      // preenche o string[]; o formato repetido `mesa=1&mesa=2` é o que ele lê.
+      paramsSerializer: { indexes: null },
+    }),
   listProductionAreas: (includeInactive = false) =>
     api.get<RestaurantProductionAreaDto[]>('/api/restaurante/areas-producao', { params: { includeInactive } }),
   createProductionArea: (body: SaveRestaurantProductionAreaRequest) =>
