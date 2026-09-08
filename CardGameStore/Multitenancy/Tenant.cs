@@ -55,6 +55,22 @@ public class Tenant
     [Column("status")]
     public TenantStatus Status { get; set; } = TenantStatus.Active;
 
+    /// <summary>False quando a última tentativa de migrar o schema falhou.</summary>
+    [Column("schema_ready")]
+    public bool SchemaReady { get; set; } = true;
+
+    /// <summary>Última migration aplicada com sucesso ao schema operacional.</summary>
+    [MaxLength(150)]
+    [Column("schema_version")]
+    public string? SchemaVersion { get; set; }
+
+    [MaxLength(500)]
+    [Column("schema_migration_error")]
+    public string? SchemaMigrationError { get; set; }
+
+    [Column("schema_checked_at")]
+    public DateTime? SchemaCheckedAt { get; set; }
+
     [Column("kind")]
     public TenantKind Kind { get; set; } = TenantKind.Native;
 

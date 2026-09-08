@@ -7,6 +7,9 @@ namespace CardGameStore.DTOs;
 
 public class VendaAvulsaRequest
 {
+    /// <summary>Identifica uma tentativa lógica; retries devem reutilizar o valor.</summary>
+    public Guid IdempotencyKey { get; set; } = Guid.NewGuid();
+
     [MaxLength(150)]
     public string? ClientName { get; set; }
 

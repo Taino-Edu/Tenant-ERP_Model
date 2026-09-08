@@ -539,6 +539,7 @@ function VendaWizard({
       current.valid === next.valid ? current : next)
   }, [])
   const [submitting, setSubmitting] = useState(false)
+  const saleAttemptRef = useRef<{ payload: string; key: string } | null>(null)
 
   // Pagamento dividido (segundo método)
   const [splitEnabled, setSplit] = useState(false)
@@ -695,6 +696,16 @@ function VendaWizard({
     if (!splitValid) { toast.error('Valor do segundo pagamento inválido.'); return }
     setSubmitting(true)
     try {
+      const attemptPayload = JSON.stringify({
+        clientName: clientName.trim() || null, payment, cart: cart.map(i => ({
+          productId: i.product.id, quantity: i.quantity, variantId: i.variantId,
+        })), discountMode, discountPct, discountCents, selectedUserId, splitEnabled,
+        secondPayment, secondAmountCents, emitirNota, cashReceived: cashState.cashReceivedInCents,
+        cashRoundingDiscount,
+      })
+      if (saleAttemptRef.current?.payload !== attemptPayload)
+        saleAttemptRef.current = { payload: attemptPayload, key: crypto.randomUUID() }
+
       const { data } = await vendaAvulsaApi.register(
         clientName.trim() || null,
         payment,
@@ -707,7 +718,9 @@ function VendaWizard({
         site.enabledModules.includes('fiscal') && emitirNota,
         usesCash ? cashState.cashReceivedInCents : undefined,
         cashRoundingDiscount,
+        saleAttemptRef.current.key,
       )
+      saleAttemptRef.current = null
       onComplete(data)
       toast.success('Venda registrada!')
       handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)

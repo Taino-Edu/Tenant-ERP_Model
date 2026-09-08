@@ -137,6 +137,34 @@ public class TenantResolutionMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_TenantComMigrationFalha_Retorna503SemAcessarSchema()
+    {
+        await using var catalog = CreateCatalogDb();
+        catalog.Tenants.Add(new Tenant
+        {
+            Slug = "em-manutencao", SchemaName = "tenant_em_manutencao",
+            Status = TenantStatus.Active, SchemaReady = false,
+        });
+        await catalog.SaveChangesAsync();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("em-manutencao.3esysten.com.br", services);
+        ctx.Response.Body = new MemoryStream();
+        var nextCalled = false;
+        var middleware = CreateMiddleware(_ =>
+        {
+            nextCalled = true;
+            return Task.CompletedTask;
+        }, rootDomain: "3esysten.com.br");
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        ctx.Response.Headers.RetryAfter.ToString().Should().Be("300");
+        nextCalled.Should().BeFalse();
+        tenantContext.IsExplicitlySet.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task InvokeAsync_HostDesconhecido_CaiNoTenantZero()
     {
         var catalog = CreateCatalogDb();

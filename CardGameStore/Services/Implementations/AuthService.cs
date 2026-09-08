@@ -259,6 +259,7 @@ public class AuthService : IAuthService
         {
             user.RefreshToken       = null;
             user.RefreshTokenExpiry = null;
+            user.SessionVersion++;
             user.UpdatedAt          = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             return;
@@ -411,7 +412,7 @@ public class AuthService : IAuthService
         if (!string.IsNullOrEmpty(email))
             claims.Add(new(JwtRegisteredClaimNames.Email, email));
 
-        if (role == UserRole.PlatformOwner)
+        if (sessionVersion > 0)
             claims.Add(new("session_version", sessionVersion.ToString()));
 
         if (permissions != null && permissions.Length > 0)

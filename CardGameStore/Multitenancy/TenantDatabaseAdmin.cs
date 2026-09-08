@@ -41,15 +41,15 @@ public sealed class TenantDatabaseAdmin
         return await db.Tenants.AsNoTracking().ToListAsync(ct);
     }
 
-    public async Task CreateAndMigrateTenantAsync(
+    public async Task<string?> CreateAndMigrateTenantAsync(
         Guid tenantId, string schemaName, string[] enabledModules, CancellationToken ct = default)
     {
         schemaName = TenantSchemaName.Validate(schemaName);
         await ExecuteAdminSqlAsync($"CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"", ct);
-        await MigrateTenantAsync(tenantId, schemaName, enabledModules, ct);
+        return await MigrateTenantAsync(tenantId, schemaName, enabledModules, ct);
     }
 
-    public async Task MigrateTenantAsync(
+    public async Task<string?> MigrateTenantAsync(
         Guid tenantId, string schemaName, string[] enabledModules, CancellationToken ct = default)
     {
         schemaName = TenantSchemaName.Validate(schemaName);
@@ -68,6 +68,7 @@ public sealed class TenantDatabaseAdmin
 
         await using var db = new AppDbContext(options);
         await db.Database.MigrateAsync(ct);
+        var schemaVersion = (await db.Database.GetAppliedMigrationsAsync(ct)).LastOrDefault();
         var role = _credentials.RoleFor(tenantId);
         var password = _credentials.PasswordFor(tenantId);
         await EnsureTenantRoleAsync(role, password, ct);
@@ -75,6 +76,7 @@ public sealed class TenantDatabaseAdmin
             schemaName, role,
             db.Model.GetEntityTypes().Select(t => t.GetTableName()).Where(n => n is not null)!,
             ct);
+        return schemaVersion;
     }
 
     public Task DropTenantSchemaAsync(string schemaName, CancellationToken ct = default)

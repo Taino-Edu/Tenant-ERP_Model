@@ -1,4 +1,6 @@
 ﻿using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -6,6 +8,7 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CardGameStore.Services.Implementations;
 
@@ -28,6 +31,15 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
     {
+        if (request.IdempotencyKey == Guid.Empty)
+            throw new InvalidOperationException("Identificador da tentativa de venda inválido.");
+
+        var requestFingerprint = Fingerprint(request, adminId);
+        var alreadyCommitted = await _db.VendasAvulsas.AsNoTracking()
+            .FirstOrDefaultAsync(v => v.Id == request.IdempotencyKey);
+        if (alreadyCommitted is not null)
+            return MapIdempotentResult(alreadyCommitted, requestFingerprint);
+
         // Decisão contábil: fidelidade foi retirada das novas vendas. O histórico
         // e os saldos permanecem para auditoria/estorno, mas request forjado não
         // pode usar pontos/cashback nem como pagamento secundário.
@@ -82,10 +94,28 @@ public class VendaAvulsaService : IVendaAvulsaService
         VendaAvulsa venda = null!;
         NotaFiscalEmitida? nota = null;
 
-        await strategy.ExecuteAsync(async () =>
+        try
         {
-            _db.ChangeTracker.Clear();
-            await using var transaction = await _db.Database.BeginTransactionAsync();
+            await strategy.ExecuteAsync(async () =>
+            {
+                _db.ChangeTracker.Clear();
+                await using var transaction = await _db.Database.BeginTransactionAsync();
+
+                var committedDuringRetry = await _db.VendasAvulsas.AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.Id == request.IdempotencyKey);
+                if (committedDuringRetry is not null)
+                {
+                    EnsureSameRequest(committedDuringRetry, requestFingerprint);
+                    venda = committedDuringRetry;
+                    return;
+                }
+
+                if (request.PaymentMethod == PaymentMethod.Crediario && request.UserId.HasValue)
+                {
+                    var lockKey = CrediarioLockKey.ForUser(request.UserId.Value);
+                    await _db.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT pg_advisory_xact_lock({lockKey})");
+                }
 
             var vendaItems = new List<VendaAvulsaItem>();
             var total      = 0;
@@ -183,6 +213,8 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         venda = new VendaAvulsa
         {
+            Id                         = request.IdempotencyKey,
+            RequestFingerprint         = requestFingerprint,
             Items                      = vendaItems,
             TotalInCents               = finalTotal,
             DiscountPercent            = discountPercentStored,
@@ -200,6 +232,12 @@ public class VendaAvulsaService : IVendaAvulsaService
             SoldByAdminId              = adminId,
             SoldByAdminName            = adminName,
             FiscalEffectsCapturedAt    = DateTime.UtcNow,
+            FiscalEmissaoEscolhida     = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase)
+                ? request.EmitirNotaFiscal : null,
+            FiscalDecisaoPorUserId     = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase)
+                ? adminId : null,
+            FiscalDecisaoEm            = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase)
+                ? DateTime.UtcNow : null,
         };
 
         _db.VendasAvulsas.Add(venda);
@@ -409,20 +447,20 @@ public class VendaAvulsaService : IVendaAvulsaService
         venda.CrediarioAmountAtSale = crediarioAmountAtSale;
         await _db.SaveChangesAsync();
 
-        await transaction.CommitAsync();
-        });
-
-        // CON-003 — ver ComandaService.CloseComandaAsync: a escolha é registrada
-        // mesmo (e principalmente) quando é "não emitir".
-        var moduloFiscalAtivo = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
-        if (moduloFiscalAtivo)
+                await transaction.CommitAsync();
+            });
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "PK_vendas_avulsas" })
         {
-            venda.FiscalEmissaoEscolhida = request.EmitirNotaFiscal;
-            venda.FiscalDecisaoPorUserId = adminId;
-            venda.FiscalDecisaoEm        = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            _db.ChangeTracker.Clear();
+            venda = await _db.VendasAvulsas.AsNoTracking()
+                .SingleAsync(v => v.Id == request.IdempotencyKey);
+            EnsureSameRequest(venda, requestFingerprint);
         }
 
+        // A decisão fiscal já foi gravada na mesma transação da venda.
+        var moduloFiscalAtivo = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
         if (request.EmitirNotaFiscal && moduloFiscalAtivo)
         {
             using var scope = _scopeFactory.CreateScope();
@@ -437,6 +475,29 @@ public class VendaAvulsaService : IVendaAvulsaService
         dto.NotaFiscalStatus         = nota?.Status.ToString();
         dto.NotaFiscalMotivoRejeicao = nota?.MotivoRejeicao;
         return dto;
+    }
+
+    private static string Fingerprint(VendaAvulsaRequest request, Guid adminId) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            request.ClientName, request.UserId, request.PaymentMethod, request.DiscountPercent,
+            request.DiscountInCents, request.SecondPaymentMethod, request.SecondPaymentAmountInCents,
+            request.CashReceivedInCents, request.CashRoundingDiscountInCents, request.EmitirNotaFiscal,
+            Items = request.Items.Select(i => new { i.ProductId, i.VariantId, i.Quantity }).ToArray(),
+            AdminId = adminId,
+        }))));
+
+    private static void EnsureSameRequest(VendaAvulsa venda, string fingerprint)
+    {
+        if (!string.Equals(venda.RequestFingerprint, fingerprint, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                "O identificador desta venda já foi usado com dados diferentes. Atualize a tela e tente novamente.");
+    }
+
+    private static VendaAvulsaDto MapIdempotentResult(VendaAvulsa venda, string fingerprint)
+    {
+        EnsureSameRequest(venda, fingerprint);
+        return MapToDto(venda);
     }
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)

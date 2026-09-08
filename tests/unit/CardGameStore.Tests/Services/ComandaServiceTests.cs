@@ -110,6 +110,58 @@ public class ComandaServiceTests
         comanda.Status.Should().Be(ComandaStatus.Fechada);
     }
 
+    [Fact]
+    public async Task CloseComanda_DuasAcumulacoesConcorrentes_DevePreservarOsDoisValores()
+    {
+        using var owner = CreateDb(nameof(CloseComanda_DuasAcumulacoesConcorrentes_DevePreservarOsDoisValores));
+        await using var concurrent = TestDbFactory.CreateSharingSchemaOf(owner);
+        var (user, product, first) = await SeedAsync(owner);
+        owner.ChangeTracker.Clear();
+        await owner.Comandas.Where(c => c.Id == first.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.TotalInCents, 500));
+        owner.ComandaItems.Add(new ComandaItem
+        {
+            ComandaId = first.Id, ProductId = product.Id, ItemNameSnapshot = "Item A",
+            UnitPriceInCents = 500, SubtotalInCents = 500, Quantity = 1,
+            AddedByUserId = user.Id,
+        });
+        var second = new Comanda
+        {
+            UserId = user.Id, Status = ComandaStatus.Aberta, TotalInCents = 700,
+            Items =
+            [
+                new ComandaItem
+                {
+                    ProductId = product.Id, ItemNameSnapshot = "Item B",
+                    UnitPriceInCents = 700, SubtotalInCents = 700, Quantity = 1,
+                    AddedByUserId = user.Id,
+                },
+            ],
+        };
+        var debt = new Crediario
+        {
+            UserId = user.Id, ValorEmCentavos = 1000, DataVencimento = DateTime.UtcNow.AddDays(30),
+            AbertoPorAdminId = Guid.NewGuid(), Status = CrediariosStatus.Aberto,
+        };
+        owner.Comandas.Add(second);
+        owner.Crediarios.Add(debt);
+        await owner.SaveChangesAsync();
+
+        await Task.WhenAll(
+            CreateService(owner).CloseComandaAsync(first.Id, Guid.NewGuid(),
+                paymentMethod: PaymentMethod.Crediario, crediarioExistenteId: debt.Id),
+            CreateService(concurrent).CloseComandaAsync(second.Id, Guid.NewGuid(),
+                paymentMethod: PaymentMethod.Crediario, crediarioExistenteId: debt.Id));
+
+        owner.ChangeTracker.Clear();
+        var persisted = await owner.Crediarios.SingleAsync();
+        persisted.ValorEmCentavos.Should().Be(2200);
+        var itemNames = System.Text.Json.JsonSerializer
+            .Deserialize<List<ItemCrediarioDto>>(persisted.ItensJson!)!;
+        itemNames.Select(i => i.ItemName).Should().BeEquivalentTo("Item A", "Item B");
+        (await owner.Comandas.CountAsync(c => c.Status == ComandaStatus.Fechada)).Should().Be(2);
+    }
+
     // ── Abrir comanda ─────────────────────────────────────────────────────────
 
     [Fact]

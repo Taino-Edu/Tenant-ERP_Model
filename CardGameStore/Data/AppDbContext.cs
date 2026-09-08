@@ -405,6 +405,8 @@ public class AppDbContext : DbContext
                   .HasConversion<string>();
 
             entity.HasIndex(c => new { c.UserId, c.Status })
+                  .IsUnique()
+                  .HasFilter("status = 'Aberto'")
                   .HasDatabaseName("ix_crediarios_user_status");
 
             entity.HasIndex(c => c.Status)

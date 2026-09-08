@@ -66,6 +66,9 @@ builder.Logging.AddDebug();
 // 1. CONFIGURAÇÕES
 // ---------------------------------------------------------------------------
 var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
+if (jwtSettings is null)
+    throw new InvalidOperationException("JwtSettings não configurado.");
+ProductionConfigurationGuard.ValidateJwt(jwtSettings, builder.Environment.IsProduction());
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
@@ -622,9 +625,8 @@ var app = builder.Build();
 
 // ---------------------------------------------------------------------------
 // 14.5 CHECAGEM DE SEGURANÇA — avisa em todo boot (não só no seed) se cookies
-// não estão seguros em produção. COOKIE_SECURE=false é o padrão gerado pelo
-// setup.sh pro primeiro deploy sem domínio/HTTPS (teste por IP puro) — mas é
-// fácil esquecer de trocar pra true depois que domínio + Cloudflare entram no ar.
+// não estão seguros em produção. O Compose e o setup usam true; false só deve
+// existir deliberadamente em um teste temporário por HTTP/IP.
 // ---------------------------------------------------------------------------
 if (!app.Environment.IsDevelopment() && app.Configuration.GetValue<bool?>("COOKIE_SECURE") == false)
 {
@@ -696,32 +698,42 @@ using (var scope = app.Services.CreateScope())
         // sobre isso. Agora rastreia falhas e o resumo final é WARNING (não INFO) se
         // qualquer uma ocorreu, com a lista de slugs — visível no boot, não só grep de log.
         var tenantsComFalha = new List<string>();
+        var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
 
         foreach (var tenant in tenantsParaMigrar)
         {
+            var catalogTenant = await catalog.Tenants.SingleAsync(t => t.Id == tenant.Id);
             try
             {
+                string? schemaVersion;
                 if (tenant.Kind == TenantKind.ExternalIntegrated)
-                    await databaseAdmin.CreateAndMigrateTenantAsync(
+                    schemaVersion = await databaseAdmin.CreateAndMigrateTenantAsync(
                         tenant.Id, tenant.SchemaName, tenant.EnabledModules);
                 else
-                    await databaseAdmin.MigrateTenantAsync(
+                    schemaVersion = await databaseAdmin.MigrateTenantAsync(
                         tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+                catalogTenant.SchemaReady = true;
+                catalogTenant.SchemaVersion = schemaVersion;
+                catalogTenant.SchemaMigrationError = null;
+                catalogTenant.SchemaCheckedAt = DateTime.UtcNow;
             }
             catch (Exception ex)
             {
-                // Um schema quebrado/tenant com migration pendente conflitante
-                // não pode travar o boot dos outros — loga e segue o loop.
                 tenantsComFalha.Add(tenant.Slug);
+                catalogTenant.SchemaReady = false;
+                catalogTenant.SchemaMigrationError = ex.GetBaseException().Message[..Math.Min(
+                    ex.GetBaseException().Message.Length, 500)];
+                catalogTenant.SchemaCheckedAt = DateTime.UtcNow;
                 logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
             }
+            await catalog.SaveChangesAsync();
         }
 
         if (tenantsComFalha.Count > 0)
             logger.LogWarning(
                 "Migrations: {Ok}/{Total} tenant(s) OK — FALHOU em {Falha}: {Slugs}. Esses tenants " +
-                "continuam rodando no schema desatualizado até o próximo restart bem-sucedido — " +
-                "investigar antes que um endpoint novo quebre pra eles.",
+                "foram isolados em manutenção até o próximo restart bem-sucedido.",
                 tenantsParaMigrar.Count - tenantsComFalha.Count, tenantsParaMigrar.Count,
                 tenantsComFalha.Count, string.Join(", ", tenantsComFalha));
         else
@@ -732,7 +744,9 @@ using (var scope = app.Services.CreateScope())
         // Seed: cria o admin se não existir
         if (!db.Users.Any(u => u.Email == "admin@tenant-erp.local"))
         {
-            var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD") ?? "SenhaForte@123";
+            var adminPassword = ProductionConfigurationGuard.SeedPassword(
+                Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD"),
+                app.Environment.IsProduction(), "ADMIN_SEED_PASSWORD");
             if (adminPassword == "SenhaForte@123")
                 logger.LogWarning("ATENÇÃO: admin criado com senha padrão. Defina ADMIN_SEED_PASSWORD no ambiente de produção!");
 
@@ -758,7 +772,9 @@ using (var scope = app.Services.CreateScope())
         var platformOwnerEmail = Environment.GetEnvironmentVariable("PLATFORM_OWNER_EMAIL");
         if (!string.IsNullOrWhiteSpace(platformOwnerEmail) && !db.Users.Any(u => u.Email == platformOwnerEmail))
         {
-            var ownerPassword = Environment.GetEnvironmentVariable("PLATFORM_OWNER_SEED_PASSWORD") ?? "SenhaForte@123";
+            var ownerPassword = ProductionConfigurationGuard.SeedPassword(
+                Environment.GetEnvironmentVariable("PLATFORM_OWNER_SEED_PASSWORD"),
+                app.Environment.IsProduction(), "PLATFORM_OWNER_SEED_PASSWORD");
             if (ownerPassword == "SenhaForte@123")
                 logger.LogWarning("ATENÇÃO: dono da plataforma criado com senha padrão. Defina PLATFORM_OWNER_SEED_PASSWORD no ambiente de produção!");
 
@@ -956,6 +972,7 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseBrowserRequestGuard();
 app.UseTenantClaimGuard();
+app.UseSessionVersionValidation();
 app.UseIntegrationAccess();
 app.UseAuthorization();
 app.UsePlatformAccess();

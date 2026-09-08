@@ -109,6 +109,80 @@ public class VendaAvulsaServiceTests
     }
 
     [Fact]
+    public async Task Register_MesmaChaveEmRetry_DevePersistirEDebitarEstoqueUmaVez()
+    {
+        using var db = CreateDb(nameof(Register_MesmaChaveEmRetry_DevePersistirEDebitarEstoqueUmaVez));
+        var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
+        var service = CreateService(db);
+        var request = new VendaAvulsaRequest
+        {
+            IdempotencyKey = Guid.NewGuid(),
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 2 }],
+        };
+
+        var first = await service.RegisterAsync(request, AdminId, AdminName);
+        db.ChangeTracker.Clear();
+        var retry = await service.RegisterAsync(request, AdminId, AdminName);
+
+        retry.Id.Should().Be(first.Id);
+        (await db.VendasAvulsas.CountAsync()).Should().Be(1);
+        db.ChangeTracker.Clear();
+        (await db.Products.FindAsync(product.Id))!.StockQuantity.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Register_MesmaChaveComDadosDiferentes_DeveRecusarSemNovoEfeito()
+    {
+        using var db = CreateDb(nameof(Register_MesmaChaveComDadosDiferentes_DeveRecusarSemNovoEfeito));
+        var product = await SeedProductAsync(db, stock: 5);
+        var service = CreateService(db);
+        var key = Guid.NewGuid();
+
+        await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            IdempotencyKey = key,
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        var retry = async () => await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            IdempotencyKey = key,
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 2 }],
+        }, AdminId, AdminName);
+
+        await retry.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*já foi usado com dados diferentes*");
+        db.ChangeTracker.Clear();
+        (await db.Products.FindAsync(product.Id))!.StockQuantity.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task Register_RetryConcorrente_DeveConfirmarUmaUnicaVenda()
+    {
+        using var owner = CreateDb(nameof(Register_RetryConcorrente_DeveConfirmarUmaUnicaVenda));
+        await using var concurrent = TestDbFactory.CreateSharingSchemaOf(owner);
+        var product = await SeedProductAsync(owner, stock: 5);
+        var request = new VendaAvulsaRequest
+        {
+            IdempotencyKey = Guid.NewGuid(),
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        };
+
+        var results = await Task.WhenAll(
+            CreateService(owner).RegisterAsync(request, AdminId, AdminName),
+            CreateService(concurrent).RegisterAsync(request, AdminId, AdminName));
+
+        results.Select(r => r.Id).Should().OnlyContain(id => id == request.IdempotencyKey);
+        owner.ChangeTracker.Clear();
+        (await owner.VendasAvulsas.CountAsync()).Should().Be(1);
+        (await owner.Products.FindAsync(product.Id))!.StockQuantity.Should().Be(4);
+    }
+
+    [Fact]
     public async Task Register_ComClientName_DevePreservarNomeNoDto()
     {
         using var db = CreateDb(nameof(Register_ComClientName_DevePreservarNomeNoDto));

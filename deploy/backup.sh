@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# backup.sh — Backup diário de PostgreSQL
+# backup.sh — Backup diário dos bancos e dos uploads persistentes
 #
 # USO MANUAL:
 #   cd /opt/tenant-erp && bash deploy/backup.sh
@@ -153,6 +153,26 @@ else
   echo "[$(date '+%H:%M:%S')] Evolution: banco '$EVOLUTION_DB' não existe — pulando (feature desligada)"
 fi
 
+# ── Uploads persistentes ───────────────────────────────────────────────────────
+# Fotos, documentos e imagens vivem no volume api_uploads, fora do PostgreSQL.
+# Copiar pelo container da API evita depender do nome físico que o Compose dá ao
+# volume (ele pode receber prefixo do projeto).
+UPLOAD_FILE="$BACKUP_DIR/uploads_${TIMESTAMP}.tar.gz"
+echo "[$(date '+%H:%M:%S')] Uploads → $UPLOAD_FILE"
+docker run --rm --volumes-from cardgamestore_api:ro postgres:16-alpine \
+  tar -C /app/wwwroot/uploads -cf - . \
+  | gzip > "$UPLOAD_FILE"
+
+if ! gzip -t "$UPLOAD_FILE" 2>/dev/null || ! tar -tzf "$UPLOAD_FILE" >/dev/null 2>&1; then
+  echo "[$(date '+%H:%M:%S')] ❌ ERRO: $UPLOAD_FILE está corrompido — removendo." >&2
+  rm -f "$UPLOAD_FILE"
+  exit 1
+fi
+
+UPLOAD_SIZE=$(du -sh "$UPLOAD_FILE" | cut -f1)
+echo "[$(date '+%H:%M:%S')] Uploads OK ($UPLOAD_SIZE, integridade verificada)"
+DUMPS+=("$UPLOAD_FILE")
+
 # ── Cópia off-site (opcional) ──────────────────────────────────────────────────
 # Sem isto, o backup vive no MESMO disco do banco — uma falha de VPS/disco leva
 # banco e backup juntos. Só roda se BACKUP_REMOTE_CMD estiver definido.
@@ -235,7 +255,8 @@ fi
 # `.gpg` também: o fluxo normal apaga o cifrado logo após o envio, mas uma queda
 # no meio do laço (ou um `kill`) deixa o arquivo para trás. Sem esta extensão na
 # busca, esse resto acumularia para sempre no disco.
-REMOVED=$(find "$BACKUP_DIR" \( -name "*.sql.gz" -o -name "*.sql.gz.gpg" \) \
+REMOVED=$(find "$BACKUP_DIR" \( -name "*.sql.gz" -o -name "*.sql.gz.gpg" \
+  -o -name "*.tar.gz" -o -name "*.tar.gz.gpg" \) \
   -mtime +"$MAX_DAYS" -print -delete | wc -l)
 echo "[$(date '+%H:%M:%S')] $REMOVED arquivo(s) com mais de $MAX_DAYS dias removidos"
 

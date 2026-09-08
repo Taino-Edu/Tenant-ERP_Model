@@ -91,6 +91,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
 
     steps:
       # secrets não são acessíveis no `if` de job — a checagem gracioso fica
@@ -122,6 +125,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           # Sanitiza os secrets: remove espaços/quebras de linha, aspas e crases
           # de copy-paste, e tolera "root@IP" colado no DEPLOY_HOST por engano.
@@ -175,7 +179,12 @@ jobs:
             exit 1
           fi
 
-          ssh "${SSH_OPTS[@]}" "$USUARIO@$HOST" 'bash /opt/tenant-erp/deploy/update.sh'
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::GITHUB_SHA inválido; deploy abortado."
+            exit 1
+          }
+          ssh "${SSH_OPTS[@]}" "$USUARIO@$HOST" \
+            "DEPLOY_SHA=$DEPLOY_SHA bash /opt/tenant-erp/deploy/update.sh"
 
       - name: Smoke test pós-deploy
         if: steps.check.outputs.configured == 'true'

@@ -5,14 +5,14 @@
 | | |
 |---|---|
 | **Quando** | Todo dia às 03:00 (cron instalado pelo `setup.sh`) e antes de cada deploy (`update.sh`) |
-| **O quê** | `postgres_<timestamp>.sql.gz` (o ERP) e `evolution_<timestamp>.sql.gz` (sessões de WhatsApp, se a feature estiver ligada) |
+| **O quê** | `postgres_<timestamp>.sql.gz` (ERP), `evolution_<timestamp>.sql.gz` (WhatsApp, se ativo) e `uploads_<timestamp>.tar.gz` (arquivos do volume da API) |
 | **Onde** | `/opt/tenant-erp/backups` |
 | **Retenção local** | 7 dias (`BACKUP_RETAIN_DAYS`) |
 | **Integridade** | `gzip -t` + tamanho mínimo. Dump corrompido ou vazio é apagado e o script falha na hora |
 
-Os dois bancos são separados de propósito: o `pg_dump` do ERP **não** cobre o da
-Evolution. Perder aquele banco significa pedir a cada cliente com WhatsApp que
-leia o QR Code de novo.
+Os dois bancos são separados de propósito, e nenhum `pg_dump` cobre o volume de
+uploads. Perder o banco da Evolution exige reconectar o WhatsApp; perder o volume
+remove fotos e documentos mesmo que o PostgreSQL seja restaurado.
 
 ## Cópia off-site no Cloudflare R2
 
@@ -177,6 +177,17 @@ guardadas só no VPS que se perdeu, o backup não serve para nada — é por iss
 a frase mora no gerenciador de senhas da empresa.
 
 O `evolution_<TS>.sql.gz.gpg` restaura igual, no banco `evolution`.
+
+Restaure os uploads com a API parada. A extração sobrescreve arquivos de mesmo
+nome; arquivos criados depois do snapshot permanecem no volume:
+
+```bash
+docker stop cardgamestore_api
+gunzip -c uploads_<TS>.tar.gz \
+  | docker run --rm -i --volumes-from cardgamestore_api postgres:16-alpine \
+      tar -C /app/wwwroot/uploads -xf -
+docker start cardgamestore_api
+```
 
 ## Duas coisas que ninguém lembra de fazer
 

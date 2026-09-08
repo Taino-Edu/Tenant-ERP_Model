@@ -70,7 +70,7 @@ public class TenantResolutionMiddleware
         {
             tenant = await LookupCachedAsync($"tenant-slug:{slug}", () => catalog.Tenants
                 .Where(t => t.Slug == slug)
-                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
+                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules, t.SchemaReady))
                 .FirstOrDefaultAsync());
 
             // Slug bem-formado (subdomínio de nível único do RootDomain) que NÃO
@@ -108,7 +108,7 @@ public class TenantResolutionMiddleware
             var hostLower = host.ToLowerInvariant();
             tenant = await LookupCachedAsync($"tenant-domain:{hostLower}", () => catalog.Tenants
                 .Where(t => t.CustomDomain == hostLower)
-                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
+                .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules, t.SchemaReady))
                 .FirstOrDefaultAsync());
         }
 
@@ -118,6 +118,17 @@ public class TenantResolutionMiddleware
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
+                return;
+            }
+
+            if (!tenant.SchemaReady)
+            {
+                context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+                context.Response.Headers.RetryAfter = "300";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    Message = "Esta loja está temporariamente em manutenção. Tente novamente em alguns minutos."
+                });
                 return;
             }
 
@@ -233,7 +244,8 @@ public class TenantResolutionMiddleware
     }
 
     private sealed record TenantLookup(
-        Guid Id, string SchemaName, TenantStatus Status, TenantKind Kind, string[] EnabledModules);
+        Guid Id, string SchemaName, TenantStatus Status, TenantKind Kind,
+        string[] EnabledModules, bool SchemaReady);
 
     /// <summary>
     /// Extrai o primeiro label do host quando ele é exatamente um subdomínio de

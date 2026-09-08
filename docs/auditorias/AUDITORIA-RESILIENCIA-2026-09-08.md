@@ -9,6 +9,11 @@
 > Origem: revisão cruzada entre duas varreduras independentes (uma focada em
 > autenticação, outra em resiliência transacional), reconciliadas contra o código.
 
+> **Atualização da implementação:** RES-001 a RES-007 e AUTH-001 foram corrigidos
+> na rodada seguinte e validados com 997 testes backend, PostgreSQL real, lint,
+> tipagem e build de produção do frontend. AUTH-002 (lockout/2FA) continua aberto
+> porque exige política de produto e um fluxo adicional de autenticação.
+
 ## Como ler os estados
 
 - `CONFIRMADO` — reproduzi a leitura, o arquivo e a linha batem com a descrição.

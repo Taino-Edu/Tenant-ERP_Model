@@ -18,6 +18,11 @@ public class VendaAvulsa
     [Column("id")]
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    /// <summary>Hash dos dados associados ao Id, para recusar reuso conflitante.</summary>
+    [Column("request_fingerprint")]
+    [MaxLength(64)]
+    public string? RequestFingerprint { get; set; }
+
     /// <summary>Snapshot dos itens vendidos. Mapeado como JSONB — ver OnModelCreating.</summary>
     public List<VendaAvulsaItem> Items { get; set; } = new();
 

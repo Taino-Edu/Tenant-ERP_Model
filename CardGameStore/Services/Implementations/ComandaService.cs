@@ -505,6 +505,40 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false, int? cashReceivedInCents = null, int cashRoundingDiscountInCents = 0)
     {
+        if (paymentMethod != PaymentMethod.Crediario)
+            return await CloseComandaCoreAsync(comandaId, adminId, paymentMethod, observacao,
+                secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId,
+                discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents);
+
+        var userId = await _db.Comandas.AsNoTracking()
+            .Where(c => c.Id == comandaId)
+            .Select(c => (Guid?)c.UserId)
+            .SingleOrDefaultAsync()
+            ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
+        var lockKey = CrediarioLockKey.ForUser(userId);
+
+        await _db.Database.OpenConnectionAsync();
+        var acquired = false;
+        try
+        {
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_lock({lockKey})");
+            acquired = true;
+            return await CloseComandaCoreAsync(comandaId, adminId, paymentMethod, observacao,
+                secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId,
+                discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents);
+        }
+        finally
+        {
+            if (acquired)
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_unlock({lockKey})");
+            await _db.Database.CloseConnectionAsync();
+        }
+    }
+
+    private async Task<ComandaDto> CloseComandaCoreAsync(Guid comandaId, Guid adminId, string paymentMethod, string? observacao, string? secondPaymentMethod, int secondPaymentAmountInCents, Guid? crediarioExistenteId, int discountInCents, bool emitirNotaFiscal, int? cashReceivedInCents, int cashRoundingDiscountInCents)
+    {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)

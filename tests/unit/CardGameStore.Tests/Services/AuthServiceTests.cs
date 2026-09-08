@@ -669,4 +669,26 @@ public class AuthServiceTests
             "sessões ativas devem ser invalidadas quando a senha é alterada");
         atualizado.RefreshTokenExpiry.Should().BeNull();
     }
+
+    [Fact]
+    public async Task Logout_DeveInvalidarRefreshEAccessTokenAtual()
+    {
+        using var db = CreateAuthServiceDb();
+        var user = new User
+        {
+            Name = "Cliente", PasswordHash = "hash", Role = UserRole.Customer,
+            RefreshToken = "hash-token", RefreshTokenExpiry = DateTime.UtcNow.AddDays(1),
+            SessionVersion = 7,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        await CreateAuthService(db).LogoutAsync(user.Id);
+
+        db.ChangeTracker.Clear();
+        var persisted = await db.Users.FindAsync(user.Id);
+        persisted!.RefreshToken.Should().BeNull();
+        persisted.RefreshTokenExpiry.Should().BeNull();
+        persisted.SessionVersion.Should().Be(8);
+    }
 }

@@ -3,12 +3,12 @@
 # update.sh — Atualiza o Tenant-ERP no VPS com a última versão do GitHub
 #
 # USO:
-#   bash /opt/tenant-erp/deploy/update.sh
+#   DEPLOY_SHA=<commit de 40 caracteres> bash /opt/tenant-erp/deploy/update.sh
 #
 # FLUXO SEGURO:
 #   1. Backup do banco ANTES de qualquer mudança (ponto de restauração).
 #   2. Taga as imagens atuais como :rollback.
-#   3. git pull + build + up -d (migrations rodam no boot da API).
+#   3. Checkout do commit aprovado + build + up -d (migrations rodam no boot).
 #   4. Health check em /health. Se a API não subir, reverte pras imagens
 #      :rollback automaticamente e aborta — o site volta pro estado anterior.
 #
@@ -36,6 +36,24 @@ COMPOSE_DIR="$APP_DIR/deploy"
 COMPOSE="docker compose -f docker-compose.prod.yml"
 IMAGES=(cardgamestore_api cardgamestore_frontend)
 
+# Impede cron, execução manual e dois runners de alterarem o mesmo checkout ou
+# os mesmos containers ao mesmo tempo. O descritor permanece aberto até o fim.
+command -v flock >/dev/null 2>&1 || {
+    echo "flock não está instalado; instale util-linux antes de fazer deploy." >&2
+    exit 1
+}
+exec 9>"$APP_DIR/.deploy.lock"
+if ! flock -n 9; then
+    echo "Outro deploy já está em andamento; esta execução não fará alterações." >&2
+    exit 75
+fi
+
+DEPLOY_SHA="${DEPLOY_SHA:-${1:-}}"
+if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "DEPLOY_SHA deve conter o SHA completo (40 caracteres) aprovado pelo CI." >&2
+    exit 2
+fi
+
 echo -e "${YELLOW}🔄 Atualizando Tenant-ERP...${NC}"
 
 # ── 1. Backup pré-deploy (ponto de restauração) ─────────────────────────────
@@ -56,10 +74,20 @@ for img in "${IMAGES[@]}"; do
     fi
 done
 
-# ── 3. Pull + build + up ────────────────────────────────────────────────────
+# ── 3. Checkout exato + build + up ─────────────────────────────────────────
 cd "$APP_DIR"
-DEPLOY_STAGE="git pull"
-git pull origin main
+DEPLOY_STAGE="checkout do commit aprovado"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo -e "${RED}❌ O checkout do VPS tem alterações versionadas locais; deploy abortado para não sobrescrevê-las.${NC}"
+    exit 1
+fi
+git fetch --prune origin main
+git cat-file -e "${DEPLOY_SHA}^{commit}"
+if ! git merge-base --is-ancestor "$DEPLOY_SHA" origin/main; then
+    echo -e "${RED}❌ O commit informado não pertence à main remota atual.${NC}"
+    exit 1
+fi
+git checkout --detach "$DEPLOY_SHA"
 # O .env canônico é o do diretório PAI; o de deploy/ é cópia descartável, e esta
 # linha a sobrescreve a cada execução. Quem editar deploy/.env perde a alteração
 # aqui, em silêncio — sem erro, sem aviso, e o sintoma aparece só na próxima vez

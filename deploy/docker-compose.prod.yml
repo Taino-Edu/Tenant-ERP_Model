@@ -161,7 +161,7 @@ services:
       # compartilhado entre todos os tenants — nenhum código as lia mais.
       # Segurança — só true quando estiver atrás de HTTPS (Cloudflare); em teste
       # via IP puro/HTTP direto tem que ser false, senão o cookie nunca é aceito.
-      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-true}"
       CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost}"
       # Multi-tenancy — domínio raiz dos subdomínios de tenant (ex: loja.SEU_DOMINIO).
       # Sem isso, TenantResolutionMiddleware.ExtractSlug() nunca acha slug nenhum e

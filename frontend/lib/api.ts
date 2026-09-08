@@ -14,6 +14,7 @@ import { clearAuth } from './auth'
 // se o acesso é por IP, domínio ou subdomínio de tenant.
 export const api = axios.create({
   baseURL: '',
+  timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
   // withCredentials garante que o browser envie os cookies HttpOnly
   // (accessToken, refreshToken) em todas as requisições cross-origin.
@@ -49,7 +50,7 @@ let refreshPromise: Promise<void> | null = null
 async function doRefresh(): Promise<void> {
   // O refreshToken é enviado automaticamente via cookie HttpOnly (withCredentials).
   // O backend lê o cookie e retorna novos cookies — sem manipulação manual de tokens.
-  await axios.post('/api/auth/refresh', {}, { withCredentials: true })
+  await axios.post('/api/auth/refresh', {}, { withCredentials: true, timeout: 15_000 })
 }
 
 /**
@@ -81,7 +82,16 @@ api.interceptors.response.use(
         await refreshSession()
         // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
-      } catch {
+      } catch (refreshError) {
+        // Queda de rede, timeout, rate limit e erro 5xx não provam que a sessão
+        // expirou. Mantém a identidade local e deixa a tela exibir a falha para
+        // que uma nova tentativa possa funcionar quando o serviço voltar.
+        const refreshStatus = axios.isAxiosError(refreshError)
+          ? refreshError.response?.status
+          : undefined
+        if (refreshStatus !== 401 && refreshStatus !== 403)
+          return Promise.reject(refreshError)
+
         // Refresh falhou — redireciona de acordo com o tipo de página:
         //   /admin/*      → /login   (painel de gestão da loja)
         //   /plataforma/* → /login   (painel da plataforma; é pra lá que o
@@ -575,9 +585,10 @@ export const vendaAvulsaApi = {
     emitirNotaFiscal = false,
     cashReceivedInCents?: number,
     cashRoundingDiscountInCents = 0,
+    idempotencyKey = crypto.randomUUID(),
   ) =>
     api.post<VendaAvulsaDto>('/api/venda-avulsa', {
-      clientName, paymentMethod, items, discountPercent, discountInCents, userId,
+      idempotencyKey, clientName, paymentMethod, items, discountPercent, discountInCents, userId,
       secondPaymentMethod: secondPaymentMethod || null,
       secondPaymentAmountInCents,
       emitirNotaFiscal,
