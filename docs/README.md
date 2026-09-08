@@ -4,6 +4,25 @@ Este diretorio concentra a documentacao duravel do projeto. Arquivos que precisa
 ficar ao lado do codigo que descrevem, como os READMEs de testes, schemas e deploy,
 continuam em seus respectivos diretorios.
 
+## Por onde comecar
+
+Leia nesta ordem — os tres primeiros dizem o que e verdade hoje, e cada um
+governa um recorte diferente. Fora dessa ordem, e facil decidir com base em
+documento vencido.
+
+1. [Status executivo](planejamento/STATUS.md) — estado verificado, o que entrou
+   desde a revisao anterior e quais riscos estao abertos. **Comece aqui.**
+2. [Backlog operacional](planejamento/BACKLOG.md) — fila continua: CRM,
+   prospeccao, dados, QA, UX, infra.
+3. [Escopo do rebuild (RB-01 a RB-05)](planejamento/REBUILD-ESCOPO-2026-08.md) —
+   pagamentos, pedidos online, multi-CNPJ e comandas. **Manda sobre o backlog
+   nesses cinco temas.**
+4. [Auditoria de resiliencia e autenticacao](auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md)
+   — achados `RES-00x`/`AUTH-00x` com arquivo e linha. Sao os P0 reais.
+
+> Todo documento de planejamento carrega a data da ultima revisao no cabecalho.
+> Se estiver com mais de um mes, confira contra o codigo antes de decidir.
+
 ## Referencias principais
 
 - [Arquitetura e fluxos](arquitetura/DOCUMENTACAO-COMPLETA.md)
@@ -11,8 +30,6 @@ continuam em seus respectivos diretorios.
 - [Integracao REST multi-tenant](arquitetura/INTEGRACAO-API-MULTITENANT.md)
 - [Casos de uso](produto/CASOS-DE-USO.md)
 - [Guia de testes](testes/GUIA-DE-TESTES.md)
-- [Status executivo](planejamento/STATUS.md)
-- [Backlog](planejamento/BACKLOG.md)
 - [Google: sitemap enviado, alerta de segurança e próximas etapas](operacao/INDEXACAO-CHECKLIST.md)
 - [Plano do MVP de Pedidos Online](planejamento/PLANO-MVP-PEDIDOS-ONLINE.md)
 

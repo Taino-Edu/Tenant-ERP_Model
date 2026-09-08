@@ -1,12 +1,22 @@
 # Backlog operacional — Tenant-ERP
 
-> **Fonte de verdade a partir de 2026-08-11.** Esta parte do documento é o backlog
-> vigente. O conteúdo anterior foi preservado no final como histórico e não deve
-> ser usado sozinho para decidir o próximo trabalho.
+> **Revisado em 2026-09-08** contra a `main` em `2bfb896`. Esta parte do documento
+> é o backlog vigente. O conteúdo anterior foi preservado no final como histórico
+> e não deve ser usado sozinho para decidir o próximo trabalho.
 >
-> **Base funcional auditada:** commit `38228e4`, código local, migrações, testes,
-> documentação, branches e worktrees registradas. Não confundir “há uma branch”
-> com “a funcionalidade está pronta na main”.
+> **Base funcional auditada:** a varredura original foi feita sobre `38228e4`
+> (2026-08-11). Entre aquele commit e `2bfb896` entraram **170 commits**, e a
+> revisão de 2026-09-08 corrigiu os itens que ficaram para trás — estão marcados
+> com `· revisado 2026-09-08`. Não confundir “há uma branch” com “a funcionalidade
+> está pronta na main”.
+>
+> **Este documento não governa sozinho.** Ver a divisão em
+> [`STATUS.md`](STATUS.md):
+> - [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) manda sobre
+>   pagamentos, pedidos online, multi-CNPJ e comandas (`RB-01` a `RB-05`).
+> - [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md)
+>   governa os achados `RES-00x` e `AUTH-00x` de idempotência, concorrência,
+>   guardrails de produção e sessão. **Esses são hoje os itens P0 reais.**
 
 ## Como manter este backlog
 
@@ -22,57 +32,69 @@
 
 ## Resumo executivo
 
-### Situação confirmada
+### Situação confirmada · revisado 2026-09-08
 
-- A `main` remota e `codex/atalhos-manual-inteligente` incluem `66c081b`.
-- A worktree principal estava limpa no início desta auditoria.
-- Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
-- Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 784 testes,
-  zero falhas e zero ignorados.
-- Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
-  comandas e indicações/comissões já têm implementação na `main`.
+- A `main` está limpa e alinhada com `origin/main` em `2bfb896`.
+- Multi-tenant, billing, leads, prospecção, diretório público, restaurante,
+  comandas e indicações/comissões têm implementação na `main`.
 - Consentimento de cookies versionado, documentos legais, sitemap, robots,
   metadados sociais e bloqueio de indexação das áreas privadas estão na `main`.
-- O primeiro ciclo da nova prospecção foi implementado e validado em 2026-08-11:
-  cache PostgreSQL, histórico retomável, atualização explícita, estados dos
-  candidatos e busca OSM por área administrativa sem limite fixo.
-- O bot interno de captação entrou no segundo ciclo em 2026-08-11: campanhas
-  agendadas, execuções auditáveis, pausa/retomada, fila de revisão humana e
-  enriquecimento incremental persistente já estão implementados.
+- A prospecção persistente e a cobertura OSM ampliada estão na `main`; o bot
+  interno de captação com revisão humana também.
+- **Novo desde 2026-08-11:** cobrança automática da plataforma via Asaas
+  (`RB-01`, concluído), comandas fora do gate do Restaurante (`RB-05`),
+  integração REST multi-tenant por escopos, motor fiscal hospedado para tenants
+  externos, módulos empacotados em `packages/`, Next 15, GTM/Meta Pixel atrás do
+  consentimento, navegação por área no admin e vitrine pública com controle de
+  visibilidade.
+- **CI:** build + testes do backend contra Postgres real, lint + build do
+  frontend, deploy e smoke. Playwright **não** roda no CI.
+- **Suíte:** último número registrado é 893 testes, zero falhas (2026-08-26,
+  entrega do `RB-01`). Não reexecutada em 2026-09-08 — Docker local indisponível.
 
-### Direção recomendada
+### Direção recomendada · revisado 2026-09-08
 
-1. Corrigir a fundação da prospecção (`PROS-001` e `PROS-002`): pesquisa
-   persistente, cobertura OSM completa, histórico e deduplicação.
-2. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) e conectar a origem da
+1. **Fechar os riscos de resiliência antes de feature nova:** `RES-003`
+   (guardrails que só avisam), `RES-001` (idempotência da venda) e `RES-002`
+   (concorrência do crediário), nessa ordem. Ver
+   [a auditoria](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md).
+2. `REP-001`: decidir uma a uma as seis worktrees e as branches fora da `main`.
+3. `RB-02` (recebimento das vendas do lojista) e `RB-04` (multi-CNPJ) — os dois
+   de prioridade alta que sobraram do rebuild.
+4. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) e conectar a origem da
    prospecção às oportunidades e atividades.
-3. Adicionar enriquecimento governado (`PROS-003`) e a camada analítica
+5. Completar a prospecção (`PROS-001`/`PROS-002`) e a camada analítica
    (`DATA-001` a `DATA-003`).
-4. Implementar cobrança recorrente real da plataforma (`PAY-001`).
-5. Automatizar pesquisa com bot (`PROS-004`) somente após proveniência,
-   privacidade, quotas e revisão humana estarem prontas.
 
 ## P0 — segurança, integridade e liberação
+
+> **Os P0 reais de 2026-09-08 não estão nesta seção.** A auditoria de resiliência
+> levantou nove achados, e os três primeiros estão acima de tudo que está
+> listado aqui — venda avulsa não
+> idempotente com retry do EF ligado, acúmulo de crediário que perde atualização
+> concorrente, e três guardrails de produção que só avisam em vez de derrubar o
+> boot. Estão em
+> [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md)
+> como `RES-001` a `RES-007` e `AUTH-001`/`AUTH-002`, com arquivo e linha.
+> Os itens abaixo são anteriores e permanecem válidos no que diz respeito ao seu
+> próprio escopo.
 
 ### SEC-001 — Sanitizar HTML dos comprovantes
 
 - **Estado:** `CONCLUÍDO` em 2026-08-11
-- **Evidência:** há mudanças não commitadas na worktree
-  `.claude/worktrees/musing-solomon-133b2e` em:
-  - `frontend/app/admin/venda-avulsa/page.tsx`;
-  - `frontend/components/admin/comanda/shared.ts`.
-- **O que fazem:** escapam nome da loja, cliente, mesa e produtos antes de
-  interpolá-los em HTML enviado a `document.write()`.
-- **Risco atual:** conteúdo cadastrado pode entrar cru no template de impressão.
 - **Entregue:** helper central `frontend/lib/html.ts` aplicado a todos os usos de
   `document.write()` encontrados: venda avulsa, relatório diário, comanda,
   crediário e impressão de QR Codes, incluindo loja, cliente, mesa, produto,
   forma de pagamento, URL e atributos HTML.
 - **Validação:** lint e build de produção aprovados; 2 testes Playwright cobrem
   `<script>`, `<`, `>`, `&`, aspas, apóstrofo, acentos e valores formatados.
-- **Observação:** a worktree original continua intacta até `REP-001`; a correção
-  já foi portada para a branch atual e não depende mais dela.
+- **Observação:** a correção está na `main` e não depende mais de worktree
+  nenhuma. A worktree `.claude/worktrees/musing-solomon-133b2e` ainda guarda a
+  versão original não commitada dos dois arquivos
+  (`frontend/app/admin/venda-avulsa/page.tsx` e
+  `frontend/components/admin/comanda/shared.ts`) — é descarte, e sai junto com
+  `REP-001`. Confirmado em 2026-09-08: é a **única** das seis worktrees com
+  alteração pendente.
 
 ### QA-001 — Descobrir por que a suíte unitária completa não termina
 
@@ -123,13 +145,19 @@
 
 ### REP-001 — Reconciliar worktrees e branches antigas
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Não commitado:** somente a worktree citada em `SEC-001`.
+- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (segue pendente; a
+  evidência abaixo foi reconferida com `git worktree list` e `git status`)
+- **Seis worktrees registradas. Não commitado:** somente a citada em `SEC-001`
+  (`.claude/worktrees/musing-solomon-133b2e`, dois arquivos, conteúdo já
+  superado pela `main` — é descarte).
 - **Worktrees limpas com commits fora da main:**
   - `C:/tmp/octus-security-verify` — `fc72d29`, gestão/segurança da equipe;
-  - `C:/tmp/Tenant-ERP-load-audit` — performance e auditoria de carga;
-  - `C:/tmp/Tenant-ERP-pr38-reconcile` — correção VAPID;
-  - `C:/tmp/Tenant-ERP-swagger` — Swagger em produção.
+  - `C:/tmp/Tenant-ERP-load-audit` — `7c0dcc1`, branch `codex/release-load-audit`;
+  - `C:/tmp/Tenant-ERP-pr38-reconcile` — `49a1eb6`, branch `codex/fix-vapid-bootstrap`;
+  - `C:/tmp/Tenant-ERP-swagger` — `0d5fb5d`, branch `codex/fix-prod-swagger`;
+  - `.claude/worktrees/vibrant-faraday-ff6046` — `6aebedb`, HEAD solto.
+- **Nota:** `claude/plano-logout-sessao` é a branch que ataca o `AUTH-001` da
+  auditoria de resiliência — revisar essa primeiro, não por último.
 - **Branches locais não integralmente incorporadas:** planos técnicos, integrações,
   isolamento, VAPID/Swagger e auditoria de carga. Algumas divergem da `main` e não
   devem ser mescladas em lote.
@@ -485,24 +513,36 @@
 
 ### PAY-001 — Cobrança recorrente real dos tenants
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Já existe:** preço por tenant, implantação, mensalidades, competência,
-  vencimento, baixa manual, MRR, inadimplência e comissões.
-- **Não existe:** assinatura/cobrança automática do SaaS e suspensão automatizada.
-- **Decisão pendente:** Mercado Pago OAuth, Banco Inter ou outro gateway para a
-  mensalidade da plataforma. Não confundir com Pix das vendas dos lojistas.
-- **Critério de conclusão:** cobrança idempotente, webhook validado, retry,
-  conciliação, régua de inadimplência, suspensão segura, reativação e trilha de
-  auditoria em sandbox e produção.
+- **Estado:** `CONCLUÍDO` em 2026-08-31 · revisado 2026-09-08
+- **Substituído por `RB-01`** em
+  [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md), que é a fonte de
+  verdade deste tema. **A decisão de gateway não está mais pendente: é o Asaas**,
+  atrás da interface `IPlatformPaymentGateway` para permitir troca sem reescrever
+  webhook, baixa e régua.
+- **Entregue:** `AsaasPlatformGateway`, `POST /api/webhooks/billing` autenticado
+  por segredo no header, baixa idempotente por índice único filtrado
+  `(gateway, external_charge_id)`, `AplicarReguaDeCobrancaAsync` (suspende
+  vencido além da carência e reativa quem quitou) e
+  `PlatformBillingBackgroundService` de 12 em 12 horas.
+- **Validação:** cobrança emitida pelo job, paga no sandbox e baixada sozinha
+  pelo webhook em 2026-08-31; 893 testes passando, 24 novos.
+- **Falta:** exercício em produção com credenciais reais — a validação foi em
+  sandbox.
 
-### PAY-002 — Mercado Pago para vendas dos lojistas
+### PAY-002 — Recebimento das vendas dos lojistas
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Evidência:** existe um plano detalhado em
-  `docs/PLANO-PAGAMENTOS-MULTITENANT-MERCADO-PAGO.md`, mas o código atual só
-  registra configuração; OAuth, criação de pagamento e webhook não existem.
-- **Critério de conclusão:** fluxo OAuth por tenant, Pix, consulta autenticada,
-  webhook idempotente e isolamento comprovado; Banco Inter continua funcionando.
+- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08
+- **Renomeado e reescopado:** virou `RB-02` em
+  [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md), como **multi-PSP** —
+  não mais "Mercado Pago" como escolha fechada. Prioridade alta.
+- **Estado do código:** continua só registrando configuração; criação de
+  pagamento e webhook não existem. O plano antigo em
+  `PLANO-PAGAMENTOS-MULTITENANT-MERCADO-PAGO.md` vale como estudo de uma opção,
+  **não** como decisão tomada.
+- **Não confundir com `PAY-001`/`RB-01`:** aqui quem recebe é o lojista; lá, a
+  plataforma.
+- **Critério de conclusão:** fluxo por tenant, Pix, consulta autenticada, webhook
+  idempotente e isolamento comprovado; Banco Inter continua funcionando.
 
 ## P1 — restaurante e comandas
 
@@ -543,24 +583,32 @@
 
 ### QA-002 — Error boundaries por área
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Já existe:** boundaries raiz e `/admin`.
-- **Falta:** `/plataforma` e `/cliente`, preservando seus layouts e ações de retry.
+- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (segue pendente)
+- **Já existe:** `frontend/app/error.tsx` e `frontend/app/admin/error.tsx`.
+- **Falta:** `/plataforma`, `/cliente` **e `/contador`** — este último não estava
+  na lista original e também não tem boundary. Preservar layout e ação de retry
+  de cada área.
 
 ### QA-003 — Testes E2E essenciais
 
-- **Estado:** `VALIDAR`
-- **Correção do backlog antigo:** já existem cinco specs Playwright em
-  `frontend/tests/`; não é mais verdade que “não há nenhum teste escrito”.
-- **Falta:** confirmar execução no CI e cobrir login, venda, fechamento de comanda,
+- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (saiu de `VALIDAR`: a
+  parte que faltava validar foi conferida e **não** está feita)
+- **Evidência atual:** são **20 specs** Playwright em `frontend/tests/`, não
+  cinco como dizia a revisão anterior.
+- **Confirmado pendente:** nenhum dos quatro workflows em `.github/workflows/`
+  chama Playwright. O CI roda build + testes do backend contra Postgres real,
+  lint + build do frontend, deploy e smoke — E2E fica de fora.
+- **Falta:** rodar as specs no CI e cobrir login, venda, fechamento de comanda,
   comissão e isolamento de tenant com dados determinísticos.
 
 ### QA-004 — Upgrade do Next.js
 
-- **Estado:** `BLOQUEADO`
-- **Atual:** Next `14.2.35`, React `18.3.1`.
-- **Regra:** levantar vulnerabilidades atuais e seguir guia/codemods oficiais;
-  não misturar upgrade major com feature de CRM ou pagamento.
+- **Estado:** `CONCLUÍDO` em 2026-09-01 · revisado 2026-09-08
+- **Entregue:** Next `14.2.35` → `15.5.21` (commit `ae5b31a`). React segue em
+  `18.3.1`.
+- **Observação:** o item estava marcado como `BLOQUEADO` com "Atual: Next
+  14.2.35" quase um mês depois de o upgrade ter entrado na `main` — exemplo do
+  tipo de desatualização que esta revisão veio corrigir.
 
 ## P2 — experiência e manutenção
 
@@ -597,8 +645,13 @@
 - **Estado:** `PRONTO PARA FAZER`
 - **Correção do backlog antigo:** o widget já é exibido apenas quando o módulo
   `ia` está habilitado e o usuário tem permissão.
-- **Falta:** rate limit, medição de uso/custo por tenant, política de plano e opção
-  de chave própria ou cobrança repassada.
+- **Correção de 2026-09-08:** **rate limit já existe** — a política `public-ai`
+  limita o assistente público a 10 requisições/min por IP
+  (`CardGameStore/Security/RequestRateLimits.cs`). O teto de tokens de saída
+  também foi centralizado em `GeminiLimits.MaxOutputTokens`.
+- **Falta:** medição de uso/custo **por tenant**, política de plano e opção de
+  chave própria ou cobrança repassada. Não há quota por loja — o limite atual é
+  por IP e não distingue tenant.
 
 ## P3 — oportunidades condicionais
 
@@ -653,13 +706,40 @@
 - IBPT local, rotinas fiscais e controles de contingência implementados no código;
   homologação externa continua em `FIS-001`.
 - IA condicionada ao módulo e à permissão.
-- Error boundaries raiz/admin e cinco specs Playwright existentes.
+- Error boundaries raiz/admin existentes (faltam `/plataforma`, `/cliente` e
+  `/contador` — ver `QA-002`) e 20 specs Playwright em `frontend/tests/`
+  (número atualizado em 2026-09-08; ainda fora do CI, ver `QA-003`).
 - Diretório público de tenants; o item antigo que dizia “não implementado” está obsoleto.
 - Arquivos `.pptx` não estão rastreados atualmente pelo Git.
 - Consentimento de cookies funcional e versionado, recusa de opcionais sem
   quebrar autenticação, política de cookies, termos e privacidade v2.
 - SEO técnico público: metadata/canonical institucional, imagem social,
   `robots.txt`, `sitemap.xml` e `X-Robots-Tag` nas áreas privadas.
+
+### Acrescentado na revisão de 2026-09-08
+
+- **Cobrança automática da plataforma via Asaas** (`RB-01`/`PAY-001`): job,
+  webhook, baixa idempotente e régua de suspensão/reativação. Validado em
+  sandbox em 2026-08-31.
+- **Comandas fora do gate do módulo Restaurante** (`RB-05`), na `main` desde
+  2026-08-26.
+- **Integração REST multi-tenant por escopos**, suporte a tenants externos
+  integrados e motor fiscal hospedado para terceiros.
+- **Módulos Financeiro e Fiscal empacotados** em `packages/`, com
+  `export-module.ps1` gerando ZIP reproduzível sem duplicar fonte.
+- **Next.js 15.5.21** (`QA-004` encerrado).
+- **GTM e Meta Pixel atrás do consentimento**, com escopo comercial e eventos.
+- **Navegação por área no admin**, com subpáginas dentro da área ativa.
+- **Vitrine pública com controle de visibilidade por tenant.**
+- **Financeiro:** inteligência gerencial e lançamento/alteração manual de cobrança.
+- **Rate limit** extraído para política própria e testável
+  (`Security/RequestRateLimits.cs`), com política dedicada para o assistente
+  público.
+- **Correções de multi-tenancy:** tenant ausente não é cacheado, tenant
+  indisponível é identificado explicitamente e o guard deixou de falhar aberto.
+- **Contato de segurança publicado** e smoke de deploy endurecido.
+- **20 specs Playwright** em `frontend/tests/` (eram cinco) — mas ainda **fora do
+  CI**, ver `QA-003`.
 
 ## Decisões que o produto precisa tomar
 
@@ -670,7 +750,11 @@ pagamentos completos:
 2. **Funil:** quais etapas comerciais, responsáveis e SLA de contato serão padrão?
 3. **Dados de mercado:** quais fontes externas são autorizadas e qual orçamento?
 4. **Comissões:** percentual/duração padrão, impostos, estorno e portal do vendedor?
-5. **Cobrança SaaS:** gateway escolhido e política de inadimplência/suspensão?
+5. ~~**Cobrança SaaS:** gateway escolhido e política de inadimplência/suspensão?~~
+   **Respondido em 2026-08-26:** Asaas, com carência padrão de 7 dias
+   configurável, suspensão automática do vencido e reativação de quem quitou.
+   Ver `RB-01`. Continua aberto apenas o exercício em produção com credenciais
+   reais.
 6. **Métricas:** quais metas trimestrais de leads, conversão, MRR, churn e CAC?
 7. **Prospecção:** quais CNAEs/segmentos e UFs entram no primeiro recorte da base
    CNPJ, e qual frequência aceitável de atualização?

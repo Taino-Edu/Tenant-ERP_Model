@@ -73,7 +73,7 @@ Detalhes de cada camada e como somar uma rota nova sem furar o modelo: **[Perfis
 - **Segurança de Senhas:** BCrypt.Net
 
 ### Frontend — `frontend/`
-- **Framework:** Next.js 14 (App Router, React SSR)
+- **Framework:** Next.js 15 (App Router, React SSR)
 - **Tipagem:** TypeScript 5
 - **Estilização:** Tailwind CSS 3
 - **Cliente HTTP:** Axios (com interceptor para renovação silenciosa de token via refresh token)
@@ -103,7 +103,7 @@ Tenant-ERP/
 │   ├── Models/                     # Entidades PostgreSQL do Tenant (Product, Comanda, Crediario...)
 │   └── Program.cs                  # Configuração do pipeline da API e injeção de dependências
 │
-├── frontend/                       # Frontend Next.js 14
+├── frontend/                       # Frontend Next.js 15
 │   ├── app/
 │   │   ├── admin/                  # Painel da loja (estoque, comanda, financeiro, fiscal...)
 │   │   ├── plataforma/             # Painel do Dono da Plataforma (gerenciador de tenants)
@@ -129,15 +129,24 @@ Tenant-ERP/
 
 ## Documentação
 
+Comece pelo **Status executivo** — ele diz o que é verdade hoje e para onde
+apontar. Cada documento de planejamento traz a data da última revisão no
+cabeçalho; se estiver com mais de um mês, confira contra o código antes de
+decidir.
+
 | Documento | O que cobre |
 |---|---|
+| [Status executivo](./docs/planejamento/STATUS.md) | **Ponto de partida.** Estado verificado, entregas recentes e riscos abertos |
 | [Índice da documentação](./docs/README.md) | Mapa de toda a documentação do projeto |
+| [Backlog operacional](./docs/planejamento/BACKLOG.md) | Fila contínua: CRM, prospecção, dados, QA, UX, infra |
+| [Escopo do rebuild (RB-01 a RB-05)](./docs/planejamento/REBUILD-ESCOPO-2026-08.md) | Pagamentos, pedidos online, multi-CNPJ e comandas — manda sobre o backlog nesses temas |
+| [Auditoria de resiliência e autenticação](./docs/auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Idempotência, concorrência, guardrails de produção e sessão — os P0 atuais |
 | [Arquitetura completa](./docs/arquitetura/DOCUMENTACAO-COMPLETA.md) | Arquitetura, fluxos, DER resumido, análise crítica |
 | [Modelagem de dados](./docs/arquitetura/MODELAGEM-DE-DADOS.md) | Modelo conceitual, lógico e físico; convenções do schema; modelagem da DRE, do fechamento de período e do razão de estoque |
+| [Integração REST multi-tenant](./docs/arquitetura/INTEGRACAO-API-MULTITENANT.md) | API por escopos para tenants externos integrados |
 | [Auditoria de escalonamento](./docs/auditorias/AUDITORIA-ESCALONAMENTO.md) | Auditoria de escalonamento e consistência, com o estado de cada correção |
 | [Guia de testes](./docs/testes/GUIA-DE-TESTES.md) | Como subir a stack e os roteiros de teste manual |
 | [deploy/BACKUP.md](./deploy/BACKUP.md) | Backup off-site cifrado, restauração e limites |
-| [Backlog](./docs/planejamento/BACKLOG.md) | O que está planejado |
 
 ---
 

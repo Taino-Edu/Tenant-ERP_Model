@@ -4,6 +4,11 @@
 > multi-CNPJ e a separação Comandas × Restaurante. Segue o padrão do
 > `BACKLOG.md`: ID, estado, evidência e critério de conclusão. Documento de
 > escopo — nada aqui está implementado até o item mudar de estado.
+>
+> **Acrescentado em 2026-09-08:** `RB-06`, aplicativos móveis (consumidor,
+> motoboy e a entrega como produto próprio). Este documento **manda sobre o
+> `BACKLOG.md`** nos temas `RB-01` a `RB-06`; ver a divisão em
+> [`STATUS.md`](STATUS.md).
 
 ## RB-01 — Cobrança da mensalidade da plataforma (Asaas)
 
@@ -287,6 +292,145 @@ preço, não de engenharia. Idem a cópia do site (`institucional/page.tsx`,
 `parceiros/page.tsx`), que ainda vende "módulo de restaurante (comandas e
 mesas)" — a promessa mudou e o marketing precisa acompanhar.
 
+## RB-06 — Aplicativos móveis: consumidor, motoboy e a entrega como produto
+
+**Estado:** `PRONTO PARA FAZER` · **Prioridade:** média · **Registrado em
+2026-09-08**
+
+Vieram pedidos de aplicativo, principalmente para **os clientes dos clientes** e
+para **motoboys**, com a ideia de que o app de entrega vire produto próprio
+usando o sistema como base de despacho. Distribuição pretendida: **APK baixado
+pelo próprio sistema**, porque ainda não há conta de Play Store.
+
+A decisão registrada aqui é: **não é um app, são três públicos com economias
+diferentes**, e cada um pede uma resposta técnica diferente.
+
+### 6.1 — Consumidor final: PWA, não APK
+
+**Decisão: o consumidor não recebe APK.** Sideload exige habilitar "fontes
+desconhecidas" e atravessar o aviso do Play Protect — fricção alta justamente no
+público de menor engajamento, que decide em segundos. E o modelo APK exclui o
+iPhone inteiro. O PWA instala pela tela de início no iOS e recebe push (16.4+,
+quando instalado).
+
+**O PWA já existe, e a auditoria de 2026-09-08 mostra que ele foi feito para o
+lojista.** O que está certo hoje:
+
+- `frontend/app/manifest.ts` é **dinâmico por tenant** — lê o Host, resolve nome
+  e ícone da loja, `display: standalone`, `theme_color`, `orientation`, `lang`.
+- Fallback de ícone com `purpose: any` e `maskable`.
+- iOS declarado em `layout.tsx` (`appleWebApp`, `apple-touch-fullscreen`).
+- `beforeinstallprompt` capturado em `components/PWAInstallButton.tsx`, montado
+  no layout raiz.
+- Web Push VAPID ponta a ponta, e com a ordem certa: busca a chave **antes** de
+  pedir permissão, para não queimar a permissão do usuário numa instalação sem
+  push configurado.
+
+**Defeitos confirmados para o caso do consumidor:**
+
+1. **O manifest descreve o ERP, não a loja.** `description` é `"Sistema de
+   gestão para lojas e varejo"` e os `shortcuts` apontam para
+   `/admin/venda-avulsa` e `/admin/dashboard`. Um consumidor que instalar o app
+   da padaria recebe atalho para a Frente de Caixa dela.
+2. **`start_url: '/'`** — instalando pela área do cliente, o app abre na raiz.
+3. **O service worker só trata `push` e `notificationclick`.** Não tem handler
+   de `fetch`, não faz cache: abrir sem rede é tela de erro. Para app de pedido,
+   isso é ruim.
+4. **O SW só é registrado dentro do `NotificationBell`**, e o registro fica
+   **depois** do `return` que ocorre quando o servidor não tem VAPID. Instalação
+   sem push configurado nunca registra service worker nenhum.
+5. **Ícone do iOS é SVG.** `icons.apple` cai em `/icon.svg`; o iOS ignora SVG em
+   `apple-touch-icon` e precisa de PNG. Não há **nenhum** PNG de ícone em
+   `frontend/public/` além do `logo-octus.png`. Na prática, no iPhone o app
+   instala sem a marca.
+6. **Nenhum tenant tem ícone de PWA configurado** — o próprio comentário do
+   arquivo registra isso. Todo mundo instala com a identidade Octus, não com a
+   da loja. É o `PROD-001` do backlog, que deixa de ser cosmético aqui.
+
+**Implementação sugerida:** manifest por público, não por instalação. O manifest
+já é rota dinâmica; basta `/cliente/*` apontar (via `generateMetadata`) para um
+manifest próprio, com `start_url` na área do cliente, descrição da loja e
+atalhos do consumidor, enquanto o admin mantém o atual.
+
+**Critério de conclusão:** um consumidor instala pelo celular da loja X, o app
+abre na área do cliente com o nome e o ícone da loja X, funciona sem rede o
+suficiente para não mostrar tela de erro, e o iPhone recebe o ícone certo.
+
+### 6.2 — Motoboy: aqui o app nativo se justifica
+
+Localização em background, tela apagada, notificação confiável e sinal ruim. O
+PWA faz isso mal no Android e não faz no iOS. E o perfil inverte a lógica do
+sideload: são poucos usuários, é ferramenta de trabalho, instalam uma vez. **É
+aqui que o APK faz sentido**, não no consumidor.
+
+**Escopo: equipe própria da loja primeiro, não pool compartilhado.** Um app
+único, multi-loja, onde o motoboy entra vinculado ao lojista que o cadastrou.
+Isso valida a parte difícil — background location, notificação, offline,
+bateria — sem abrir marketplace, e mantém o vínculo trabalhista onde ele já
+está hoje: com o lojista.
+
+**Conflito de escopo a resolver:** o `RB-03`/`PLANO-MVP-PEDIDOS-ONLINE.md`
+registra explicitamente **"sem cadastro de motorista"**. O app de motoboy
+contradiz essa decisão e depende de revê-la. Não tratar como "só fazer o app".
+
+**Stack:** Expo/React Native — o time já escreve TypeScript e React, o EAS Build
+gera APK sem conta de Play Store, e `expo-location`/`expo-notifications`
+resolvem o que o PWA não resolve. Capacitor empacotaria o que existe mais
+barato, mas entrega pior justamente no background location, que é o motivo de o
+app existir.
+
+**Dependências técnicas:**
+
+- **Tenant:** nenhuma mudança de backend. O tenant é resolvido por Host
+  (`TenantResolutionMiddleware`), então o app apontando para
+  `https://<slug>.3esysten.com.br/api/...` é resolvido igual ao navegador. **Não
+  criar header de tenant** — é exatamente o buraco fechado de propósito nas
+  tools de IA.
+- **Sessão:** app não usa cookie `HttpOnly` do mesmo jeito; precisa de token em
+  armazenamento seguro (Keystore/Keychain). Isso agrava o `AUTH-001` da
+  auditoria de resiliência — logout não invalida o access token — que hoje é
+  incômodo e ali passa a ser problema.
+- **Atualização:** APK não se atualiza sozinho. Precisa de checagem de versão
+  contra a API e tela de "atualize", senão em poucos meses há várias versões em
+  campo sem forma de saber qual.
+- **A verificar antes de apostar em APK:** o Google vem apertando a exigência de
+  verificação de desenvolvedor para apps sideloaded em dispositivos Android
+  certificados. Confirmar o estado atual da regra **antes** de fazer do APK a
+  única via de distribuição, e ter plano B desde o início.
+
+**Critério de conclusão:** motoboy de uma loja piloto recebe corrida, navega,
+atualiza status com o app em segundo plano e a tela apagada, e o lojista vê a
+posição no painel — com o APK distribuído e atualizável pelo próprio sistema.
+
+### 6.3 — Entrega como produto próprio: adiado, com porta aberta
+
+A ideia de um app de entrega geral, usando o sistema como base de despacho, fica
+**registrada e adiada** — não descartada. As razões são de tipo de negócio e de
+momento, não da ideia:
+
+- Vira **marketplace de dois lados**: aquisição, suporte e margem diferentes de
+  vender licença de ERP. Dois negócios com um time.
+- **Risco trabalhista:** vender ERP não expõe a discussão de vínculo com
+  entregador; operar entrega expõe.
+- **A infra não está pronta:** uma VPS com tudo junto, backup que não cobre
+  uploads (`RES-006`), sem monitor externo (`OPS-001`) e sem HA (`INFRA-001`).
+  Rastreamento ao vivo é escrita contínua de posição mais conexão persistente,
+  no mesmo box do SignalR das comandas.
+- **Custo de oportunidade:** `RB-02` e `RB-04` destravam receita em clientes que
+  já pagam. E `RB-02` é dependência do app do consumidor — pedido sem pagamento
+  online fica capenga.
+
+**Gatilho para reabrir:** o app de motoboy (6.2) rodando em cliente real, com
+volume que justifique compartilhar entregador entre lojas. Nessa altura, virar
+pool compartilhado é incremento, não reescrita.
+
+### Ordem interna do RB-06
+
+1. **6.1 (PWA do consumidor)** — dias, reusa tudo o que já existe.
+2. **6.2 (motoboy)** — depois do `RB-02`, e depois de revisar a decisão de "sem
+   cadastro de motorista" do `RB-03`.
+3. **6.3 (entrega como produto)** — só com o gatilho acima cumprido.
+
 ## Ordem sugerida
 
 Critério de priorização para operação de uma pessoa: **primeiro o que devolve
@@ -301,7 +445,11 @@ tempo, depois o que gera receita, por último o que é caro e ainda especulativo
 4. **RB-04** — multi-CNPJ. **Sob demanda, não especulativo:** são 59 pontos de
    `SingletonId` para uma pessoa refatorar. Só começar quando houver um cliente
    real com dois CNPJs, e aí valendo dinheiro.
-5. **RB-02** — Mercado Pago OAuth conforme demanda de lojista.
+5. **RB-02** — recebimento das vendas do lojista (multi-PSP), conforme demanda.
+6. **RB-06** — aplicativos móveis. **A parte 6.1 (PWA do consumidor) fura essa
+   fila** e pode entrar a qualquer momento: é barata, reusa o que já existe e
+   não depende de nenhum dos outros. As partes 6.2 e 6.3 seguem a ordem própria
+   registrada no item.
 
 Se RB-04 entrar antes de RB-03, o pedido online já nasce sabendo qual CNPJ
 emite. Se entrar depois, ele usa o emitente único do tenant e ganha a escolha na
