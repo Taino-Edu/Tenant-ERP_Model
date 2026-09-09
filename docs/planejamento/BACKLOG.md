@@ -48,7 +48,8 @@
   consentimento, navegação por área no admin e vitrine pública com controle de
   visibilidade.
 - **CI:** build + testes do backend contra Postgres real, lint + build do
-  frontend, deploy e smoke. Playwright **não** roda no CI.
+  frontend, 11 verificações Playwright determinísticas em Chromium, deploy e
+  smoke. Os fluxos autenticados que exigem tenant e banco ainda não rodam no CI.
 - **Suíte:** último número registrado é 893 testes, zero falhas (2026-08-26,
   entrega do `RB-01`). Não reexecutada em 2026-09-08 — Docker local indisponível.
 
@@ -583,23 +584,23 @@
 
 ### QA-002 — Error boundaries por área
 
-- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (segue pendente)
-- **Já existe:** `frontend/app/error.tsx` e `frontend/app/admin/error.tsx`.
-- **Falta:** `/plataforma`, `/cliente` **e `/contador`** — este último não estava
-  na lista original e também não tem boundary. Preservar layout e ação de retry
-  de cada área.
+- **Estado:** `CONCLUÍDO` em 2026-09-09
+- **Entregue:** boundaries próprios em `/plataforma`, `/cliente` e `/contador`,
+  todos apoiados por um componente compartilhado de recuperação. Plataforma e
+  contador preservam o shell e a navegação; cliente mantém a identidade visual.
+  Todas as áreas oferecem retry, retorno seguro e código de suporte quando o
+  Next.js fornece um digest.
 
 ### QA-003 — Testes E2E essenciais
 
-- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (saiu de `VALIDAR`: a
-  parte que faltava validar foi conferida e **não** está feita)
+- **Estado:** `EM EXECUÇÃO` · primeiro gate no CI entregue em 2026-09-09
 - **Evidência atual:** são **20 specs** Playwright em `frontend/tests/`, não
   cinco como dizia a revisão anterior.
-- **Confirmado pendente:** nenhum dos quatro workflows em `.github/workflows/`
-  chama Playwright. O CI roda build + testes do backend contra Postgres real,
-  lint + build do frontend, deploy e smoke — E2E fica de fora.
-- **Falta:** rodar as specs no CI e cobrir login, venda, fechamento de comanda,
-  comissão e isolamento de tenant com dados determinísticos.
+- **Entregue:** o job do frontend instala Chromium e executa 11 verificações das
+  specs de páginas legais, institucional e parceiros contra o build standalone.
+  API é mockada onde necessário, evitando credenciais e dados mutáveis.
+- **Falta:** preparar banco/tenant determinísticos no CI e então cobrir login,
+  venda, fechamento de comanda, comissão e isolamento de tenant.
 
 ### QA-004 — Upgrade do Next.js
 

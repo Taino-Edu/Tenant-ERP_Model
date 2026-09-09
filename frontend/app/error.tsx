@@ -2,7 +2,8 @@
 
 // =============================================================================
 // error.tsx (raiz) — Pega qualquer erro de render que estoure fora do /admin:
-// vitrine, login, cadastro, /cliente, /plataforma, /mesa, portal do contador.
+// vitrine, login, cadastro e /mesa. Cliente, plataforma, contador e admin têm
+// boundaries próprios, que preservam a navegação e o contexto de cada área.
 // Segmentos com boundary próprio (ver app/admin/error.tsx) têm prioridade;
 // este só recebe o que ninguém mais pegou, incluindo erro dos layouts deles.
 //

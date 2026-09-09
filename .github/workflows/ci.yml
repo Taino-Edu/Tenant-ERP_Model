@@ -86,6 +86,19 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Este primeiro lote usa apenas páginas públicas com API mockada. Assim o
+      # navegador valida CSS, hidratação e interações sem depender de credenciais
+      # ou de dados persistentes de um tenant.
+      - name: Instala Chromium para o smoke E2E
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke E2E no build de produção
+        run: >-
+          npx playwright test
+          tests/example.spec.ts
+          tests/institucional.spec.ts
+          tests/parceiros.spec.ts
+
   deploy:
     name: Deploy no VPS (main)
     runs-on: ubuntu-latest

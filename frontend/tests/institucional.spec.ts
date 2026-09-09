@@ -38,7 +38,7 @@ test.describe('Tema do site público', () => {
   test('o texto de apoio tem a cor do tema, não a cor herdada do título', async ({ page }) => {
     await abrir(page)
     const titulo = await corDe(page, '#recursos h2', 'color')
-    const corpo = await corDe(page, '#recursos article p', 'color')
+    const corpo = await corDe(page, '#recursos button p', 'color')
     expect(corpo).not.toBe(TRANSPARENTE)
     // `theme.body` existe justamente para não ser igual a `theme.heading`.
     expect(corpo).not.toBe(titulo)
@@ -53,7 +53,7 @@ test.describe('Tema do site público', () => {
 
     // `theme.card` no escuro é um azul-marinho mais claro que o fundo: se a
     // classe não for gerada, o card some dentro da página.
-    const card = await corDe(page, '#recursos article', 'backgroundColor')
+    const card = await corDe(page, '#recursos button', 'backgroundColor')
     expect(card).not.toBe(TRANSPARENTE)
     expect(card).not.toBe(pagina)
   })

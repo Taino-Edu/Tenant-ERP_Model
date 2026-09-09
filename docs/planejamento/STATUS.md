@@ -50,10 +50,11 @@ de agora:
 
 - `main` limpa e alinhada com `origin/main` em `2bfb896`.
 - **CI** roda: build + testes do backend contra Postgres real, lint + build do
-  frontend, deploy no VPS e smoke pós-deploy. **Playwright não roda no CI.**
+  frontend, 11 verificações Playwright públicas e determinísticas em Chromium,
+  deploy no VPS e smoke pós-deploy. Os fluxos autenticados ainda não rodam no CI.
 - **20 specs Playwright** em `frontend/tests/` — o backlog antigo dizia cinco.
-- **Error boundaries** existem na raiz e em `/admin`. **Não existem** em
-  `/plataforma`, `/cliente` e `/contador`.
+- **Error boundaries** existem na raiz e em `/admin`, `/plataforma`, `/cliente`
+  e `/contador`; as áreas com shell próprio preservam sua navegação ao falhar.
 - **Seis worktrees** registradas; apenas `.claude/worktrees/musing-solomon-133b2e`
   tem alteração não commitada (dois arquivos, os do `SEC-001` já portado). As
   outras cinco estão limpas, com commits fora da `main`.
