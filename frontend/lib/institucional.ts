@@ -55,7 +55,7 @@ export function themeFor(isDark: boolean) {
         // puxado para o azul-royal do Tailwind, e ao lado do ciano da logo lia
         // como uma segunda marca. Este é o mesmo ciano, só bem diluído.
         page: 'bg-white text-[#071f3d]', surface: 'bg-white', soft: 'bg-octus-50',
-        border: 'border-[#0b3261]/10', heading: 'text-[#071f3d]', body: 'text-[#38516d]', muted: 'text-[#657b93]',
+        border: 'border-[#0b3261]/10', heading: 'text-[#071f3d]', body: 'text-[#38516d]', muted: 'text-[#526981]',
         card: 'bg-white border-[#0b3261]/10 hover:border-octus-500/50', header: 'bg-white/90 border-[#0b3261]/10',
         outline: 'border-[#0b3261]/20 text-[#0b3261] hover:bg-octus-50',
         input: 'bg-white border-[#0b3261]/15 text-[#071f3d] placeholder:text-[#7d8ea1]',

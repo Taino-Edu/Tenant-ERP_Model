@@ -51,7 +51,7 @@ function Moldura({ url, children, theme }: { url: string; children: React.ReactN
 }
 
 const Rotulo = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">{children}</p>
+  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-300">{children}</p>
 )
 
 function TelaPdv() {

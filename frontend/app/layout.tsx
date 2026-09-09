@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { headers } from 'next/headers'
-import Script from 'next/script'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
@@ -119,22 +118,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Script VLibras — Acessibilidade (atributos customizados via spread para evitar erro TS) */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div {...({ vw: 'true' } as any)} className="enabled">
+          {/* O botão visual continua clicável. O fornecedor injeta duas imagens
+              sem alt dentro de Shadow DOM fechado; o lançador fica fora da
+              árvore assistiva porque o cabeçalho já oferece "Libras" com nome
+              acessível e aciona este mesmo controle. */}
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <div {...({ 'vw-access-button': 'true' } as any)} className="active"></div>
+          <div {...({ 'vw-access-button': 'true' } as any)} aria-hidden="true" className="active"></div>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <div {...({ 'vw-plugin-wrapper': 'true' } as any)}>
             <div className="vw-plugin-top-wrapper"></div>
           </div>
         </div>
-        <Script id="vlibras-loader" strategy="afterInteractive">
-          {`
-              window.VLibras = window.VLibras || {};
-              var script = document.createElement('script');
-              script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
-              script.onload = function() { new window.VLibras.Widget('https://vlibras.gov.br/app'); };
-              document.body.appendChild(script);
-            `}
-        </Script>
         <VLibrasController />
         {children}
         {/* Rodapé com links legais (LGPD) — não aparece no painel admin */}

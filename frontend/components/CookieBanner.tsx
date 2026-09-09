@@ -122,7 +122,7 @@ export default function CookieBanner() {
                   <span className="sm:hidden">Recusar</span>
                   <span className="hidden sm:inline">Recusar opcionais</span>
                 </button>
-                <button onClick={() => persist(customizing ? analytics : true, customizing ? marketing : true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-xs font-bold text-white hover:bg-brand-700"><ShieldCheck className="h-3.5 w-3.5" />{customizing ? 'Salvar escolhas' : 'Aceitar todos'}</button>
+                <button onClick={() => persist(customizing ? analytics : true, customizing ? marketing : true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-800 px-4 py-2 text-xs font-bold text-white hover:bg-brand-900"><ShieldCheck className="h-3.5 w-3.5" />{customizing ? 'Salvar escolhas' : 'Aceitar todos'}</button>
               </div>
             </div>
           </div>

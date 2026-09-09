@@ -211,9 +211,9 @@ body.institucional-page .js-pwa-install {
    sobre branco (reprovado para texto) e o octus-600 que resolve isso no claro
    fica apagado sobre o navy do tema escuro. `.octus-accent` é o token único
    dessa intenção — quem precisa de preenchimento continua usando bg-octus-*. */
-.octus-accent { color: #1C7B96; }
+.octus-accent { color: #186A80; }
 body.institucional-dark .octus-accent { color: #53C0DE; }
-.octus-accent-hover:hover { color: #1C7B96; }
+.octus-accent-hover:hover { color: #186A80; }
 body.institucional-dark .octus-accent-hover:hover { color: #53C0DE; }
 
 /* Na vitrine o atalho de WhatsApp ocupa o canto inferior direito. O botão de
@@ -641,6 +641,7 @@ html.light .admin-portal .text-accent-gold { color: #1e293b !important; }
    ajuda. Esconde só em mobile; desktop continua controlado pelo toggle de
    preferências em VLibrasController.tsx. */
 @media (max-width: 640px) {
-  body:not(.institucional-page) [vw] { display: none !important; }
+  body:not(.institucional-page) [vw],
+  body:not(.institucional-page) .js-vlibras-launcher { display: none !important; }
 }
 

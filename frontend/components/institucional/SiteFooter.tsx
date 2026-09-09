@@ -36,11 +36,10 @@ export default function SiteFooter({ theme }: { theme: InstitucionalTheme }) {
           {/* Mesma razão do cabeçalho: o lockup já contém o nome escrito. */}
           <Logo className="h-14 w-[104px]" title="3E Systen" />
           <p className="mt-3">Octus · gestão completa com a identidade da sua empresa.</p>
-          {/* Identificação da empresa. Um passo abaixo do resto no contraste
-              (`opacity-80`) porque é informação de rodapé, não mensagem de
-              marca — mas presente e legível: é o que liga o site à pessoa
-              jurídica citada nos Termos e na Política de Privacidade. */}
-          <p className="mt-2 text-xs opacity-80">3E Systen · CNPJ {CNPJ}</p>
+          {/* A identificação precisa manter o mesmo contraste do restante do
+              rodapé: reduzir a opacidade fazia o texto pequeno cair abaixo do
+              mínimo WCAG no tema claro. */}
+          <p className="mt-2 text-xs">3E Systen · CNPJ {CNPJ}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-5">
