@@ -31,6 +31,13 @@ public interface IEmailService
     /// <summary>Envia o código de uso único que confirma o aceite do regulamento.</summary>
     Task SendReferralSignatureCodeAsync(string toEmail, string toName, string code, DateTime expiresAt);
 
+    /// <summary>Envia o link que confirma o e-mail e cria a loja pedida pelo site.</summary>
+    /// <remarks>Com requireDelivery, lança se não houver SMTP ou o envio falhar, para quem
+    /// pediu saber na hora que o link não vai chegar.</remarks>
+    Task SendTenantSignupConfirmationAsync(
+        string toEmail, string toName, string storeName, string storeAddress, string confirmUrl,
+        DateTime expiresAt, bool requireDelivery);
+
     /// <summary>Envia email de boas-vindas após primeiro login via QR Code.</summary>
     Task SendWelcomeAsync(string toEmail, string toName);
 

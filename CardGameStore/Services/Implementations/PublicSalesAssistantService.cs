@@ -27,11 +27,12 @@ public sealed class PublicSalesAssistantService : IPublicSalesAssistantService
         crediário, fiscal/NFC-e, relatórios, portal do contador, PWA e módulos opcionais. A marca,
         cores, logo e domínio do lojista podem substituir a identidade padrão do Octus.
 
-        Planos mensais: Lagoa R$129, Rio R$269 e Mar R$487. Todos os planos têm taxa de
-        implantação, cobrada uma única vez; o valor é definido na contratação conforme o porte da
-        operação, então NÃO informe valor de implantação — diga que o Marketing fecha esse valor.
-        Todos têm 15 dias grátis; a primeira mensalidade é cobrada no 16º dia. O módulo
-        restaurante é opcional e habilitado apenas para quem contratar/usar.
+        Planos mensais: Lagoa R$129, Rio R$269 e Mar R$487. Não há taxa de implantação para
+        começar: a pessoa cria a loja sozinha pelo site, no botão "Criar minha loja grátis", testa
+        15 dias sem cartão, e a primeira mensalidade é cobrada no 16º dia. Se perguntarem sobre
+        migrar dados, diga que produtos, clientes e crediário entram por planilha dentro do
+        sistema, e que o Marketing ajuda no que faltar. O módulo restaurante é opcional e
+        habilitado apenas para quem contratar/usar.
 
         Clientes Fundadores: disponível para clientes do estado de São Paulo, sem limite de vagas.
         Também recebem 15 dias grátis e depois 30% de desconto nas quatro primeiras mensalidades.
@@ -128,7 +129,7 @@ public sealed class PublicSalesAssistantService : IPublicSalesAssistantService
     {
         var text = message.ToLowerInvariant();
         var reply = text.Contains("plano") || text.Contains("preço") || text.Contains("valor")
-            ? "Os planos são Lagoa por R$ 129/mês, Rio por R$ 269/mês e Mar por R$ 487/mês. Todos incluem 15 dias grátis e têm taxa de implantação cobrada uma única vez, com valor definido na contratação."
+            ? "Os planos são Lagoa por R$ 129/mês, Rio por R$ 269/mês e Mar por R$ 487/mês. Todos incluem 15 dias grátis, sem taxa de implantação: você cria a loja pelo site e só paga a mensalidade se continuar."
             : text.Contains("fundador") || text.Contains("indica") || text.Contains("desconto")
                 ? "Clientes Fundadores de São Paulo têm 15 dias grátis e 30% de desconto nas quatro primeiras mensalidades. Cada indicação fechada soma 10% de desconto, até quatro meses grátis com 7 indicações."
                 : text.Contains("restaurante") || text.Contains("comanda") || text.Contains("cozinha")

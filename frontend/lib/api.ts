@@ -1151,6 +1151,27 @@ export const leadsApi = {
     api.post<{ message: string }>('/api/leads', req),
 }
 
+// ── Criação de loja pelo próprio lojista (site institucional) ────────────────
+
+export interface SolicitarLojaRequest {
+  nomeResponsavel: string; email: string; nomeLoja: string; slug: string; senha: string
+  whatsApp?: string; plano?: string
+  privacyNoticeAcknowledged: boolean; privacyNoticeVersion: string
+}
+
+export interface DisponibilidadeSlugDto {
+  slug: string; disponivel: boolean; motivo?: string | null; sugestao?: string | null
+}
+
+export const signupApi = {
+  verificarSlug: (slug: string) =>
+    api.get<DisponibilidadeSlugDto>('/api/signup/slug', { params: { slug } }),
+  solicitar: (req: SolicitarLojaRequest) =>
+    api.post<{ message: string }>('/api/signup', req),
+  confirmar: (token: string) =>
+    api.post<{ slug: string; ticket: string }>('/api/signup/confirmar', { token }),
+}
+
 // ── Prospecção (busca de possíveis clientes — painel da plataforma) ───────────
 
 export interface ProspectCandidateDto {

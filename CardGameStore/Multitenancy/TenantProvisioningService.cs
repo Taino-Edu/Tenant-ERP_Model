@@ -41,6 +41,19 @@ public class TenantProvisioningService : ITenantProvisioningService
         ["Mar"]   = 487m,
     };
 
+    /// <summary>Módulos e limite de usuários de cada plano de tabela — o que o
+    /// teste grátis criado pelo site liga (TenantSignupService). Mesmo acordo da
+    /// tabela de preços: a fonte que o cliente vê é frontend/lib/planos.ts, e
+    /// TabelaPrecosSincronizadaTests quebra o CI se os dois divergirem. No painel
+    /// da plataforma os módulos continuam escolhidos à mão, loja a loja.</summary>
+    internal static readonly Dictionary<string, (string[] Modulos, int? MaxUsuarios)> RecursosDosPlanos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Lagoa"] = (new[] { "fiscal", "estoque", "restaurante" }, 2),
+        ["Rio"]   = (new[] { "fiscal", "estoque", "restaurante", "pontos", "contador", "eventos" }, 6),
+        // Restaurante fica fora do Mar de propósito — ver o comentário em planos.ts.
+        ["Mar"]   = (new[] { "fiscal", "estoque", "pontos", "contador", "ia", "eventos" }, null),
+    };
+
     /// <summary>Preço de tabela do plano, ou 0 se o nome não está na tabela
     /// (PlanName é texto livre: cortesia, piloto, plano legado ou typo). Zero é
     /// deliberado — chutar um valor infla o MRR com número que parece certo e que
@@ -51,15 +64,17 @@ public class TenantProvisioningService : ITenantProvisioningService
     internal static void ApplyCommercialTerms(Tenant tenant)
     {
         tenant.MonthlyPrice = PrecoMensalDoPlano(tenant.PlanName);
-        // Duas mensalidades para todo plano de tabela. O Mar tinha exceção
-        // (implantação gratuita) até 20/08/2026; a exceção morava só aqui,
-        // então quando o site passou a anunciar a taxa em todos os planos, toda
-        // loja Mar continuava nascendo com SetupFee 0 — cobrança que o
-        // comercial fechou e o sistema não gerava.
+        // Implantação não nasce mais calculada (decisão de 2026-09-11). Até ali
+        // eram 2 mensalidades em todo plano de tabela, o que não fecha com a loja
+        // criada pelo próprio lojista no site: ninguém implantou nada, e a taxa
+        // apareceria em /admin/assinatura como dívida surpresa no fim do teste.
         //
-        // Plano fora da tabela cai em MonthlyPrice 0, e 0 × 2 = 0: implantação
-        // zerada é o resultado certo pra cortesia/piloto.
-        tenant.SetupFee = tenant.MonthlyPrice * 2;
+        // Quando houver implantação de verdade (migração assistida, treinamento),
+        // o valor é definido loja a loja no painel da plataforma
+        // (PATCH tenants/{id}/billing) ou lançado como cobrança avulsa no
+        // financeiro. A conversão do CRM e o registro de indicação continuam
+        // gerando a cobrança de implantação sozinhos sempre que SetupFee > 0.
+        tenant.SetupFee = 0;
         tenant.BillingStartsOn = tenant.CreatedAt.AddDays(15);
     }
 
@@ -92,12 +107,12 @@ public class TenantProvisioningService : ITenantProvisioningService
     public async Task<Tenant> ProvisionAsync(
         string slug, string? adminEmail, string? adminPassword, string[]? enabledModules = null,
         string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native,
-        bool isPubliclyListed = false)
+        bool isPubliclyListed = false, TenantOwnerProfile? owner = null)
     {
         await _provisionLock.WaitAsync();
         try
         {
-            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers, kind, isPubliclyListed);
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers, kind, isPubliclyListed, owner);
         }
         finally
         {
@@ -107,7 +122,7 @@ public class TenantProvisioningService : ITenantProvisioningService
 
     private async Task<Tenant> ProvisionLockedAsync(
         string slug, string? adminEmail, string? adminPassword, string[]? enabledModules,
-        string? planName, int? maxUsers, TenantKind kind, bool isPubliclyListed)
+        string? planName, int? maxUsers, TenantKind kind, bool isPubliclyListed, TenantOwnerProfile? owner)
     {
         slug = slug.Trim().ToLowerInvariant();
 
@@ -124,7 +139,14 @@ public class TenantProvisioningService : ITenantProvisioningService
         {
             if (string.IsNullOrWhiteSpace(adminEmail))
                 throw new InvalidOperationException("Informe o e-mail do admin da loja.");
-            if (string.IsNullOrWhiteSpace(adminPassword) || adminPassword.Length < 6)
+            // Quem cria pelo site chega com a senha já em hash (validada no DTO com
+            // regra mais forte); só o painel da plataforma manda a senha em texto.
+            if (owner is not null)
+            {
+                if (string.IsNullOrWhiteSpace(owner.PasswordHash))
+                    throw new InvalidOperationException("O dono da loja precisa chegar com a senha definida.");
+            }
+            else if (string.IsNullOrWhiteSpace(adminPassword) || adminPassword.Length < 6)
                 throw new InvalidOperationException("A senha inicial deve ter pelo menos 6 caracteres.");
         }
 
@@ -171,9 +193,17 @@ public class TenantProvisioningService : ITenantProvisioningService
             tenant.PlanName = planName.Trim();
         if (maxUsers.HasValue)
             tenant.MaxUsers = maxUsers.Value;
+        if (owner is not null)
+        {
+            // O nome digitado no site já identifica a loja na vitrine, no painel
+            // da plataforma e no cliente do gateway; quem cadastrou recebe a
+            // cobrança até informar outro e-mail em /admin/assinatura.
+            tenant.DisplayName  = owner.StoreName;
+            tenant.BillingEmail = adminEmail!.Trim().ToLowerInvariant();
+        }
 
         // Billing: preenche a partir da tabela vigente e das regras comerciais
-        // (implantação = 2 mensalidades em todos os planos; 15 dias grátis).
+        // (mensalidade do plano, implantação zero, 15 dias grátis).
         // Fica editável depois no painel — a tabela é o ponto de partida, não uma
         // amarra: cliente que fechar por valor negociado tem o campo ajustado.
         //
@@ -206,11 +236,28 @@ public class TenantProvisioningService : ITenantProvisioningService
             {
                 db.Users.Add(new User
                 {
-                    Name         = adminEmail!,
+                    Id           = owner?.UserId ?? Guid.NewGuid(),
+                    Name         = owner?.Name ?? adminEmail!,
                     Email        = adminEmail!.Trim().ToLowerInvariant(),
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword!),
+                    PasswordHash = owner?.PasswordHash ?? BCrypt.Net.BCrypt.HashPassword(adminPassword!),
                     Role         = UserRole.Admin,
                 });
+
+                if (owner is not null)
+                {
+                    // Sem isto a loja nova se apresentaria como "Octus" (o default da
+                    // SiteConfig) no título da vitrine e nos e-mails até o dono achar a
+                    // tela de personalização. Busca antes de criar porque a linha
+                    // singleton não vem de migration: nasce na primeira gravação.
+                    var site = await db.SiteConfigs.FindAsync(SiteConfig.SingletonId);
+                    if (site is null)
+                    {
+                        site = new SiteConfig();
+                        db.SiteConfigs.Add(site);
+                    }
+                    site.SiteName = owner.StoreName;
+                }
+
                 await db.SaveChangesAsync();
             }
         }

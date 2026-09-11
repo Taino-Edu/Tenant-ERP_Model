@@ -8,12 +8,13 @@ namespace CardGameStore.Tests.Services;
 public class CommercialTermsTests
 {
     [Theory]
-    [InlineData("Lagoa", 129, 258)]
-    [InlineData("Rio", 269, 538)]
-    [InlineData("Mar", 487, 974)]
-    // Nome fora da tabela (cortesia, piloto, typo): mensalidade zero, e por
-    // consequência implantação zero. Chutar valor infla o MRR com número que
-    // parece certo.
+    // Implantação zero em todo plano desde 2026-09-11: a loja nasce pelo site, e
+    // quando houver implantação o valor é definido loja a loja no painel.
+    [InlineData("Lagoa", 129, 0)]
+    [InlineData("Rio", 269, 0)]
+    [InlineData("Mar", 487, 0)]
+    // Nome fora da tabela (cortesia, piloto, typo): mensalidade zero. Chutar
+    // valor infla o MRR com número que parece certo.
     [InlineData("Piloto interno", 0, 0)]
     public void ApplyCommercialTerms_UsesCatalogAndFifteenDayTrial(
         string planName, decimal monthlyPrice, decimal setupFee)

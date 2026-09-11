@@ -15,14 +15,16 @@ import {
   type PublicTenantDto,
 } from '@/lib/api'
 import { PLANOS } from '@/lib/planos'
+import CriarLojaForm from '@/components/institucional/CriarLojaForm'
 import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
 import SystemShowcase from '@/components/institucional/SystemShowcase'
 import Logo from '@/components/Logo'
-import { CONTACTS, ROOT_DOMAIN, publicFormErrorMessage, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
+import { CONTACTS, ROOT_DOMAIN, telHref, useInstitucionalTheme } from '@/lib/institucional'
 import type { ModuleDemoId } from '@/components/institucional/PlatformModuleDemo'
 import { trackMarketingEvent } from '@/lib/marketing'
 import { COOKIE_CONSENT_EVENT } from '@/lib/cookieConsent'
+import { escolherPlanoParaTeste } from '@/lib/criarLoja'
 
 const MARKETING_WHATSAPP = CONTACTS.marketingWhatsapp
 const PlatformModuleDemo = dynamic(() => import('@/components/institucional/PlatformModuleDemo'), { ssr: false })
@@ -47,6 +49,8 @@ const COMPARATIVO = [
 
 const FAQS = [
   ['Quando começa a cobrança?', 'Todos os planos têm 15 dias grátis. A primeira mensalidade é cobrada no 16º dia.'],
+  // Mesma resposta do FAQPage estruturado em layout.tsx.
+  ['Tem taxa de implantação?', 'Não para começar. Você cria a loja pelo site, testa por 15 dias sem cartão e só paga a mensalidade do plano se continuar.'],
   ['O Octus substitui a marca da minha loja?', 'Não. Octus é a identidade padrão da plataforma; nome, logo, cores e domínio personalizados pelo cliente sempre têm prioridade.'],
   ['O sistema atende restaurantes?', 'Sim. O módulo de restaurante é opcional e só aparece para os clientes que decidirem utilizá-lo.'],
   ['Como funciona o Programa Clientes Fundadores?', 'Clientes do estado de São Paulo têm 30% de desconto nas quatro primeiras mensalidades, além dos 15 dias grátis. Cada indicação fechada acrescenta 10% de desconto no mesmo período, até 100%.'],
@@ -65,14 +69,6 @@ function normalizeAssistantReply(reply: unknown): string {
 export default function InstitucionalPage() {
   const { isDark, toggleTheme, theme } = useInstitucionalTheme()
   const [tenants, setTenants] = useState<PublicTenantDto[]>([])
-  const [leadNome, setLeadNome] = useState('')
-  const [leadTelefone, setLeadTelefone] = useState('')
-  const [leadEmail, setLeadEmail] = useState('')
-  const [leadMensagem, setLeadMensagem] = useState('')
-  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false)
-  const [leadSubmitting, setLeadSubmitting] = useState(false)
-  const [leadSubmitted, setLeadSubmitted] = useState(false)
-  const [leadError, setLeadError] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [activeModuleDemo, setActiveModuleDemo] = useState<ModuleDemoId | null>(null)
   const [chatInput, setChatInput] = useState('')
@@ -115,25 +111,6 @@ export default function InstitucionalPage() {
       window.removeEventListener(COOKIE_CONSENT_EVENT, reconsider)
     }
   }, [])
-
-  async function handleLeadSubmit(event: FormEvent) {
-    event.preventDefault()
-    setLeadSubmitting(true)
-    setLeadError(null)
-    try {
-      await submitLead({
-        nome: leadNome.trim(), telefone: leadTelefone.trim(),
-        email: leadEmail.trim() || undefined, mensagem: leadMensagem.trim() || undefined,
-        privacyNoticeAcknowledged: privacyAcknowledged,
-      })
-      setLeadSubmitted(true)
-      trackMarketingEvent('lead_submit', { form: 'institucional', lead_kind: 'trial' })
-    } catch (error) {
-      setLeadError(publicFormErrorMessage(error, 'Não foi possível enviar agora. Fale com o Marketing pelo WhatsApp.'))
-    } finally {
-      setLeadSubmitting(false)
-    }
-  }
 
   async function handleChatSubmit(event: FormEvent) {
     event.preventDefault()
@@ -410,14 +387,6 @@ export default function InstitucionalPage() {
                 <h3 className={`text-2xl font-black ${plano.destaque ? 'text-white' : theme.heading}`}>{plano.nome}</h3>
                 <p className={`mt-2 min-h-12 text-sm leading-6 ${plano.destaque ? 'text-slate-300' : theme.muted}`}>{plano.publico}</p>
                 <p className="mt-7"><span className={`text-sm font-bold ${plano.destaque ? 'text-slate-300' : theme.muted}`}>R$ </span><span className={`text-5xl font-black tracking-tight ${plano.destaque ? 'text-white' : theme.heading}`}>{plano.preco}</span><span className={plano.destaque ? 'text-slate-300' : theme.muted}>/mês</span></p>
-                {/* Só a existência da taxa, sem o valor: ele passou a ser
-                    definido na contratação, e publicá-lo por plano tirava essa
-                    margem. Aparece em TODOS os planos — antes o Mar anunciava
-                    "Implantação gratuita", o que virou promessa a menos para
-                    honrar. */}
-                <p className={`mt-2 text-sm font-bold ${plano.destaque ? 'text-slate-300' : theme.muted}`}>
-                  + taxa de implantação
-                </p>
                 <p className={`mt-4 text-sm font-bold ${plano.destaque ? 'text-slate-200' : theme.body}`}>{plano.usuarios}</p>
                 <ul className="mt-7 flex-1 space-y-3">
                   {/* No card em destaque o fundo é navy, então o ciano da marca
@@ -426,11 +395,13 @@ export default function InstitucionalPage() {
                       informativo precisa. Daí o tom mais fechado no claro. */}
                   {plano.inclui.map(item => <li key={item} className={`flex gap-3 text-sm leading-6 ${plano.destaque ? 'text-slate-300' : theme.body}`}><Check size={18} className={`mt-0.5 shrink-0 ${plano.destaque ? 'text-octus-400' : 'octus-accent'}`} /><span>{item}</span></li>)}
                 </ul>
-                <a href="#contato" onClick={() => trackMarketingEvent('select_plan', { plan: plano.nome })} className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-extrabold transition ${plano.destaque ? 'bg-octus-600 text-white hover:bg-octus-500' : `border ${theme.outline}`}`}>Testar este plano <ArrowRight size={17} /></a>
+                {/* Antes o botão só rolava até o formulário, e todo mundo testava
+                    o Rio sem saber: o plano escolhido aqui não chegava lá. */}
+                <a href="#contato" onClick={() => { escolherPlanoParaTeste(plano.nome); trackMarketingEvent('select_plan', { plan: plano.nome }) }} className={`mt-8 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 text-sm font-extrabold transition ${plano.destaque ? 'bg-octus-600 text-white hover:bg-octus-500' : `border ${theme.outline}`}`}>Testar este plano <ArrowRight size={17} /></a>
               </article>
             ))}
           </div>
-          <p className={`mx-auto mt-8 max-w-4xl text-center text-sm leading-6 ${theme.muted}`}>Todos os planos têm taxa de implantação, cobrada uma única vez, com valor definido na contratação conforme o porte da operação. O módulo restaurante é opcional e sua ativação é alinhada conforme a operação.</p>
+          <p className={`mx-auto mt-8 max-w-4xl text-center text-sm leading-6 ${theme.muted}`}>Você cria a loja pelo site, sem taxa de implantação e sem cartão. O módulo restaurante é opcional e sua ativação é alinhada conforme a operação.</p>
         </div>
       </section>
 
@@ -508,10 +479,11 @@ export default function InstitucionalPage() {
       <section id="contato" className="scroll-mt-24 bg-[#071f3d] px-5 py-24 text-white lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.9fr_1.1fr]">
           <div>
-            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-octus-400">Vamos conversar</p>
-            <h2 className="mt-4 text-4xl font-black tracking-[-0.035em] sm:text-5xl">15 dias para sentir a diferença na rotina.</h2>
-            <p className="mt-5 text-lg leading-8 text-slate-300">Conte um pouco do seu negócio. A gente ajuda a escolher o plano e prepara a implantação sem empurrar recurso que você não precisa.</p>
+            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-octus-400">Teste grátis</p>
+            <h2 className="mt-4 text-4xl font-black tracking-[-0.035em] sm:text-5xl">Sua loja pronta agora. 15 dias grátis.</h2>
+            <p className="mt-5 text-lg leading-8 text-slate-300">Escolha o endereço, confirme o e-mail e entre direto no painel. Traga seus produtos de uma planilha e faça a primeira venda ainda hoje, sem esperar ninguém.</p>
             <div className="mt-8 space-y-3 text-sm text-slate-300">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Prefere conversar antes?</p>
               <a href={telHref(CONTACTS.supportPhone)} className="flex items-center gap-3 hover:text-white"><Headphones size={18} className="text-octus-400" />Suporte · {CONTACTS.supportPhone}</a>
               <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" onClick={() => trackMarketingEvent('whatsapp_click', { placement: 'contact' })} className="flex items-center gap-3 hover:text-white"><MessageCircle size={18} className="text-octus-400" />Marketing · {CONTACTS.marketingPhone}</a>
               <a href={telHref(CONTACTS.devPhone)} className="flex items-center gap-3 hover:text-white"><Layers3 size={18} className="text-octus-400" />Desenvolvimento · {CONTACTS.devPhone}</a>
@@ -519,19 +491,7 @@ export default function InstitucionalPage() {
             </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8">
-            {leadSubmitted ? (
-              <div className="flex min-h-80 flex-col items-center justify-center text-center"><CheckCircle2 size={42} className="text-emerald-400" /><h3 className="mt-5 text-2xl font-black">Recebemos seu contato.</h3><p className="mt-2 text-slate-300">A equipe vai falar com você em breve.</p></div>
-            ) : (
-              <form onSubmit={handleLeadSubmit} className="grid gap-4 sm:grid-cols-2">
-                <label className="text-sm font-bold">Nome<input required maxLength={150} value={leadNome} onChange={event => setLeadNome(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-octus-400" placeholder="Como podemos te chamar?" /></label>
-                <label className="text-sm font-bold">WhatsApp<input required maxLength={30} value={leadTelefone} onChange={event => setLeadTelefone(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-octus-400" placeholder="(17) 99999-9999" /></label>
-                <label className="text-sm font-bold sm:col-span-2">E-mail <span className="font-normal text-slate-400">(opcional)</span><input type="email" maxLength={255} value={leadEmail} onChange={event => setLeadEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-octus-400" placeholder="voce@empresa.com.br" /></label>
-                <label className="text-sm font-bold sm:col-span-2">Sobre seu negócio <span className="font-normal text-slate-400">(opcional)</span><textarea rows={3} maxLength={1000} value={leadMensagem} onChange={event => setLeadMensagem(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-octus-400" placeholder="Varejo, restaurante, tamanho da equipe..." /></label>
-                <label className="flex items-start gap-3 text-xs leading-relaxed text-slate-300 sm:col-span-2"><input required type="checkbox" checked={privacyAcknowledged} onChange={event => setPrivacyAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-octus-500" /><span>Li e estou ciente da <Link href="/privacidade" target="_blank" className="font-bold text-octus-300 underline">Política de Privacidade</Link>, inclusive sobre o uso dos dados para responder este contato. Esta ciência não autoriza marketing opcional.</span></label>
-                {leadError && <p className="text-sm text-red-300 sm:col-span-2">{leadError}</p>}
-                <button disabled={leadSubmitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-octus-600 px-5 py-4 font-extrabold text-white transition hover:bg-octus-500 disabled:opacity-60 sm:col-span-2">{leadSubmitting ? <><Loader2 size={18} className="animate-spin" />Enviando...</> : <>Começar meu teste grátis <ArrowRight size={18} /></>}</button>
-              </form>
-            )}
+            <CriarLojaForm />
           </div>
         </div>
       </section>

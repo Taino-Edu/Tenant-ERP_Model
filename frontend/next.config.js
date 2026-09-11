@@ -91,7 +91,7 @@ const nextConfig = {
         ],
       },
       {
-        source: '/:path(admin|plataforma|contador|cliente|login|entrar|cadastro|primeiro-acesso|reset-password|loja-nao-encontrada|loja-suspensa)/:rest*',
+        source: '/:path(admin|plataforma|contador|cliente|login|entrar|cadastro|criar-loja|primeiro-acesso|reset-password|loja-nao-encontrada|loja-suspensa)/:rest*',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
       },
     ]

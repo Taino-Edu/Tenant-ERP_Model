@@ -237,10 +237,12 @@ public class AuthController : ControllerBase
     /// <summary>Troca um ticket gerado por locate-account por uma sessão de verdade
     /// (com refresh token normal — diferente da impersonação, aqui é a própria conta
     /// logando). Uso único, expira em 90s, sempre redireciona.</summary>
-    /// <param name="ticket">Ticket de uso único gerado por locate-account.</param>
+    /// <param name="ticket">Ticket de uso único gerado por locate-account ou pela criação de loja no site.</param>
+    /// <param name="next">Destino dentro do painel depois de entrar (a loja recém-criada abre
+    /// no guia inicial). Só vale para Admin/Operator e só caminho interno — ver LoginLanding.</param>
     [HttpGet("redeem-login")]
     [AllowAnonymous]
-    public async Task<IActionResult> RedeemLogin([FromQuery] string ticket)
+    public async Task<IActionResult> RedeemLogin([FromQuery] string ticket, [FromQuery] string? next = null)
     {
         var row = await _catalog.LoginRedirectTickets.FirstOrDefaultAsync(t => t.Ticket == ticket);
 
@@ -281,6 +283,7 @@ public class AuthController : ControllerBase
                 "Customer"      => "/cliente",
                 "PlatformOwner" => "/plataforma",
                 "Contador"      => "/contador",
+                _ when CardGameStore.Security.LoginLanding.EhCaminhoSeguroDoPainel(next) => next!,
                 _               => "/admin/comanda",
             };
 

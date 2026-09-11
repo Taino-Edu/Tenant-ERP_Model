@@ -22,6 +22,7 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
     public DbSet<LoginRedirectTicket> LoginRedirectTickets { get; set; }
+    public DbSet<TenantSignup> TenantSignups { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<CrmOpportunity> CrmOpportunities { get; set; }
     public DbSet<CrmActivity> CrmActivities { get; set; }
@@ -133,6 +134,21 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(t => t.Ticket)
                   .IsUnique()
                   .HasDatabaseName("ix_login_redirect_tickets_ticket");
+        });
+
+        modelBuilder.Entity<TenantSignup>(entity =>
+        {
+            entity.HasIndex(s => s.TokenHash)
+                  .IsUnique()
+                  .HasDatabaseName("ix_tenant_signups_token_hash");
+
+            // Disponibilidade de endereço e "o mesmo e-mail pediu de novo" são as
+            // duas consultas de todo pedido.
+            entity.HasIndex(s => s.Slug)
+                  .HasDatabaseName("ix_tenant_signups_slug");
+
+            entity.HasIndex(s => s.Email)
+                  .HasDatabaseName("ix_tenant_signups_email");
         });
 
         modelBuilder.Entity<Lead>(entity =>

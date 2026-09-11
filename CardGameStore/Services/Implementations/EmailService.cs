@@ -128,6 +128,30 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Convite para a equipe Octus", body);
     }
 
+    public async Task SendTenantSignupConfirmationAsync(
+        string toEmail, string toName, string storeName, string storeAddress, string confirmUrl,
+        DateTime expiresAt, bool requireDelivery)
+    {
+        // Sai do domínio raiz, antes de a loja existir: não há SiteConfig de loja
+        // para dar nome ao e-mail, então a marca é a da plataforma. Tudo que veio
+        // do formulário é codificado — nome de loja é texto livre de desconhecido.
+        var safeName    = WebUtility.HtmlEncode(toName);
+        var safeStore   = WebUtility.HtmlEncode(storeName);
+        var safeAddress = WebUtility.HtmlEncode(storeAddress);
+        var safeUrl     = WebUtility.HtmlEncode(confirmUrl);
+        var horas       = Math.Max(1, (int)Math.Round((expiresAt - DateTime.UtcNow).TotalHours));
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>Falta um clique para a <strong>{safeStore}</strong> ficar pronta em <strong>{safeAddress}</strong>.</p>
+            <p><a href="{safeUrl}" style="background:#0e7490;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Confirmar e abrir minha loja</a></p>
+            <p>São 15 dias grátis, sem cartão. Você entra direto no painel, já logado.</p>
+            <p style="color:#888;font-size:12px;">Este link vale por {horas} horas e só funciona uma vez. Se você não pediu uma loja no Octus, ignore este e-mail: nada será criado.</p>
+            """;
+
+        await SendAsync(toEmail, toName, $"Confirme a criação da {storeName}", body, requireDelivery);
+    }
+
     public async Task SendWelcomeAsync(string toEmail, string toName)
     {
         var cfg  = await GetSiteConfigAsync();

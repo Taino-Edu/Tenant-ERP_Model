@@ -15,7 +15,7 @@ import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle, Store, EyeOff } from 'lucide-react'
 import clsx from 'clsx'
-import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao } from '@/lib/planos'
+import { PLANOS, PLANO_PERSONALIZADO, acharPlano } from '@/lib/planos'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -196,9 +196,13 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       ? 'Remover da vitrine de clientes'
       : 'Autorizada, mas sem logo — a loja só aparece na vitrine depois que o lojista cadastrar o logo. Clique para remover a autorização.'
 
-  /** Trocar de plano aplica o preço de tabela junto — era exatamente isso que
-   *  faltava: o nome mudava e o valor ficava para trás. Personalizado preserva
-   *  o valor atual, porque ali quem manda é o negociado. */
+  /** Trocar de plano aplica a mensalidade de tabela e os módulos do pacote —
+   *  era exatamente isso que faltava: o nome mudava e o valor ficava para trás.
+   *  Personalizado preserva o valor atual, porque ali quem manda é o negociado.
+   *
+   *  A implantação fica de fora de propósito: desde 2026-09-11 ela não tem valor
+   *  de tabela e só existe quando alguém a define no campo próprio desta loja.
+   *  Mandar a de tabela aqui zeraria, sem aviso, uma implantação negociada. */
   function aplicarPlano(nome: string) {
     const plano = acharPlano(nome)
     if (!plano) { saveBilling({ planName: PLANO_PERSONALIZADO }); return }
@@ -206,7 +210,6 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     saveBilling({
       planName:       plano.nome,
       monthlyPrice:   plano.preco,
-      setupFee:       taxaImplantacao(plano),
       enabledModules: plano.modules,
     })
   }

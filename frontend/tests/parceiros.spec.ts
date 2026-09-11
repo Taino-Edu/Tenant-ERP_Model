@@ -16,30 +16,30 @@ test.describe('Programa de Afiliados', () => {
     await abrirParceiros(page)
     const painel = page.locator('#simulador')
 
-    // Plano Rio (padrão, em destaque): R$ 269/mês e R$ 538 de implantação.
-    // 3 indicações → 30% de 538 x3 = 484,20 e 5% de 269 x3 = 40,35/mês.
-    await expect(painel).toContainText('R$ 484,20')
+    // Plano Rio (padrão, em destaque): R$ 269/mês e, desde 2026-09-11, sem taxa
+    // de implantação de tabela — a loja nasce pelo site. 3 indicações →
+    // implantação R$ 0,00 e 5% de 269 x3 = 40,35/mês, 484,20 no primeiro ano.
+    await expect(painel).toContainText('R$ 0,00')
     await expect(painel).toContainText('R$ 40,35')
-    await expect(painel).toContainText('R$ 968,40') // 484,20 + 40,35 x 12
+    await expect(painel).toContainText('R$ 484,20') // 0 + 40,35 x 12
+    await expect(painel).toContainText('Sem taxa de implantação')
 
     // Centavos obrigatórios: "R$ 484,2" já foi para produção uma vez.
     await expect(painel).not.toContainText(/R\$ \d+,\d(?!\d)/)
   })
 
-  // O Mar tinha implantação gratuita e servia de caso-limite aqui. Deixou de
-  // ter em 20/08/2026 (R$ 974, duas mensalidades como os demais), então o que
-  // este teste protege agora é o oposto: que o simulador acompanhe a tabela
-  // quando ela muda, em vez de continuar prometendo comissão zero.
+  // Protege que o simulador acompanhe a tabela ao trocar de plano, em vez de
+  // continuar mostrando os valores do plano que estava marcado antes.
   test('o simulador acompanha a tabela ao trocar de plano', async ({ page }) => {
     await abrirParceiros(page)
     await page.locator('#simulador').getByText('Mar', { exact: true }).click()
 
     const painel = page.locator('#simulador')
-    // Mar: R$ 487/mês e R$ 974 de implantação.
-    // 3 indicações → 30% de 974 x3 = 876,60 e 5% de 487 x3 = 73,05/mês.
-    await expect(painel).toContainText('R$ 876,60')
+    // Mar: R$ 487/mês, sem implantação de tabela.
+    // 3 indicações → 5% de 487 x3 = 73,05/mês e 876,60 no primeiro ano.
     await expect(painel).toContainText('R$ 73,05')
-    await expect(painel).not.toContainText('implantação gratuita')
+    await expect(painel).toContainText('R$ 876,60')
+    await expect(painel).not.toContainText('R$ 40,35')
   })
 
   test('as telas do sistema trocam pelas abas e o gráfico tem barras', async ({ page }) => {

@@ -384,6 +384,7 @@ builder.Services.AddHealthChecks()
 // ---------------------------------------------------------------------------
 builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IAccountLocatorService, AccountLocatorService>();
+builder.Services.AddScoped<ITenantSignupService, TenantSignupService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<ICategoryService,     CategoryService>();
