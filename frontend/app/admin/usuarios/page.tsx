@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield, FileUp } from 'lucide-react'
+import ImportarDados from '@/components/admin/ImportarDados'
 import PageHeader from '@/components/admin/PageHeader'
 import Modal from '@/components/admin/ui/Modal'
 import Link from 'next/link'
@@ -665,6 +666,9 @@ export default function UsuariosPage() {
   const [showHistorico, setShowHistorico]     = useState(false)
   const [editandoOperador, setEditandoOperador] = useState<UserSummary | null>(null)
   const [tabSection, setTabSection]           = useState<'clientes' | 'operadores'>('clientes')
+  // Mesma regra do Estoque: aparece sozinha na carteira vazia, que é quando
+  // decide se a pessoa migra ou desiste; depois fica atrás do botão.
+  const [mostrarImportacao, setMostrarImportacao] = useState(false)
   const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
   const [operators, setOperators]             = useState<UserSummary[]>([])
@@ -807,6 +811,15 @@ export default function UsuariosPage() {
           description="Gerencie clientes, pontos de fidelidade, cashback e operadores"
           actions={<>
             {tabSection === 'clientes' && (
+              <button
+                onClick={() => setMostrarImportacao(v => !v)}
+                className="btn-secondary whitespace-nowrap"
+                title="Importar clientes de um CSV"
+              >
+                <FileUp className="w-4 h-4" /> <span className="hidden sm:inline">Importar</span>
+              </button>
+            )}
+            {tabSection === 'clientes' && (
               <button onClick={() => setShowNovoCliente(true)} className="btn-primary whitespace-nowrap">
                 <UserPlus className="w-4 h-4" /> Novo Cliente
               </button>
@@ -819,6 +832,15 @@ export default function UsuariosPage() {
           </>}
         />
       </div>
+
+      {tabSection === 'clientes' && !loading && (mostrarImportacao || users.length === 0) && (
+        <ImportarDados
+          className="mb-4"
+          tipos={['clientes']}
+          titulo="Trazer a carteira de clientes"
+          descricao="Já tem os clientes em outro sistema ou numa planilha? Suba o CSV em vez de cadastrar um por um. CPF repetido ou inválido é recusado linha a linha, sem travar o resto do arquivo."
+        />
+      )}
 
       {/* Tab principal: Clientes / Operadores */}
       <div className="flex gap-1 bg-surface-800 p-1 rounded-xl mb-4 w-fit">

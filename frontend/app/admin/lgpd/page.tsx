@@ -5,11 +5,12 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api, AuditLogDto, AuditLogPagedResponse, ImportResultDto, getErrorMessage } from '@/lib/api'
-import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown, FileUp, Eye, Loader2, Package, Users, Wallet } from 'lucide-react'
+import { api, AuditLogDto, AuditLogPagedResponse, getErrorMessage } from '@/lib/api'
+import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown, Eye, Loader2, Package, Users, Wallet } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
+import ImportarDados from '@/components/admin/ImportarDados'
 import SeverityBadge from '@/components/admin/SeverityBadge'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 import Modal from '@/components/admin/ui/Modal'
@@ -85,84 +86,6 @@ function ExportarDadosSection() {
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-function ImportarDadosSection() {
-  const [enviando, setEnviando]   = useState<string | null>(null)
-  const [resultado, setResultado] = useState<{ key: string; data: ImportResultDto } | null>(null)
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-
-  async function enviar(key: string, file: File) {
-    setEnviando(key)
-    setResultado(null)
-    try {
-      const form = new FormData()
-      form.append('arquivo', file)
-      const { data } = await api.post<ImportResultDto>(`/api/import/${key}`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      setResultado({ key, data })
-      if (data.importados > 0) toast.success(`${data.importados} de ${data.totalLinhas} linha(s) importada(s)!`)
-      if (data.erros.length === 0 && data.importados === 0) toast('Arquivo vazio — nada pra importar.', { icon: 'ℹ️' })
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao importar dados'))
-    } finally {
-      setEnviando(null)
-    }
-  }
-
-  return (
-    <div className="bg-surface-800 rounded-2xl border border-surface-500 p-4 mb-6">
-      <div className="flex items-center gap-2 mb-1">
-        <FileUp className="w-4 h-4 text-brand-400" />
-        <h2 className="text-sm font-bold text-white">Importar dados</h2>
-      </div>
-      <p className="text-xs text-gray-400 mb-3">
-        Suba um CSV com as mesmas colunas do export acima. Linhas válidas são importadas — as com erro
-        aparecem listadas abaixo pra você corrigir e reenviar só essas.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        {EXPORTS.map(({ key, label, icon: Icon }) => (
-          <div key={key}>
-            <input
-              ref={el => { inputRefs.current[key] = el }}
-              type="file" accept=".csv" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) enviar(key, f); e.target.value = '' }}
-            />
-            <button
-              onClick={() => inputRefs.current[key]?.click()}
-              disabled={enviando !== null}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors text-left disabled:opacity-50"
-            >
-              {enviando === key
-                ? <Loader2 className="w-4 h-4 text-brand-400 animate-spin shrink-0" />
-                : <Icon className="w-4 h-4 text-brand-400 shrink-0" />}
-              <span className="block text-sm text-white">{label}</span>
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {resultado && (
-        <div className="mt-3 pt-3 border-t border-surface-600">
-          <p className="text-xs text-gray-300 mb-2">
-            <span className="text-white font-semibold">{EXPORTS.find(e => e.key === resultado.key)?.label}:</span>{' '}
-            {resultado.data.importados} de {resultado.data.totalLinhas} linha(s) importada(s)
-            {resultado.data.erros.length > 0 && `, ${resultado.data.erros.length} com erro`}.
-          </p>
-          {resultado.data.erros.length > 0 && (
-            <div className="bg-surface-900 rounded-lg p-2.5 max-h-40 overflow-y-auto space-y-1">
-              {resultado.data.erros.map((e, i) => (
-                <p key={i} className="text-xs text-red-400">
-                  <span className="text-gray-500">Linha {e.linha}:</span> {e.motivo}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }
@@ -493,7 +416,13 @@ export default function LgpdAdminPage() {
       </div>
 
       <ExportarDadosSection />
-      <ImportarDadosSection />
+      {/* Contraparte do export acima — aqui o enquadramento é portabilidade.
+          As mesmas importações aparecem em Estoque, Clientes e Crediário, que é
+          onde o lojista de fato procura por elas. */}
+      <ImportarDados
+        className="mb-6"
+        descricao="Contraparte da portabilidade acima: traga de volta o que exportou, ou o que veio de outro sistema. Linhas válidas entram — as com erro aparecem listadas pra você corrigir e reenviar só essas."
+      />
 
       {/* Abas */}
       <div className="flex gap-1 bg-surface-700 rounded-xl p-1 w-fit mb-6">

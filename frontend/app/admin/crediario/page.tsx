@@ -10,8 +10,9 @@ import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
   Plus, History, DollarSign, X, Search, Pencil, Printer, Package, Trash2,
-  MessageCircle, RefreshCw, QrCode,
+  MessageCircle, RefreshCw, QrCode, FileUp,
 } from 'lucide-react'
+import ImportarDados from '@/components/admin/ImportarDados'
 import { ItemCrediarioDto } from '@/lib/api'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import PageHeader from '@/components/admin/PageHeader'
@@ -1120,6 +1121,9 @@ export default function CrediarioPage() {
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
   const [pixCrediario, setPixCrediario]       = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
+  // Mesma regra do Estoque e de Clientes: sozinha na tela vazia, atrás do botão
+  // depois que já existe fiado lançado.
+  const [mostrarImportacao, setMostrarImportacao] = useState(false)
   const [confirmarExclusao, setConfirmarExclusao] = useState<CrediariosDto | null>(null)
   const [excluindo, setExcluindo]           = useState(false)
 
@@ -1225,12 +1229,27 @@ export default function CrediarioPage() {
         icon={CreditCard}
         title="Crediário"
         description="Clientes com pagamento em aberto — suporta pagamentos parciais"
-        actions={
+        actions={<>
+          <button
+            onClick={() => setMostrarImportacao(v => !v)}
+            className="btn-secondary shrink-0"
+            title="Importar crediário em aberto de um CSV"
+          >
+            <FileUp className="w-4 h-4" /> <span className="hidden sm:inline">Importar</span>
+          </button>
           <button onClick={() => setShowNovaDivida(true)} className="btn-primary shrink-0">
             <Plus className="w-4 h-4" /> Nova Dívida
           </button>
-        }
+        </>}
       />
+
+      {!loading && (mostrarImportacao || crediarios.length === 0) && (
+        <ImportarDados
+          tipos={['crediario']}
+          titulo="Trazer o fiado que já existe"
+          descricao="Migrando de caderneta ou de outro sistema? Suba o CSV com o saldo devedor de cada cliente em vez de lançar dívida por dívida."
+        />
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

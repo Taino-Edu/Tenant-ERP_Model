@@ -40,11 +40,12 @@ const PASSOS = [
     onde: '/admin/estoque',
     ondeLabel: 'Ir para Estoque',
     passos: [
-      'Abra Estoque → Novo Produto',
+      'Já tem o catálogo em planilha? Estoque → Importar, e suba o CSV de uma vez',
+      'Sem planilha: Estoque → Novo Produto',
       'Informe nome, categoria, custo, preço, estoque inicial e estoque mínimo',
       'Se emitir nota, copie o NCM da NF-e de entrada do fornecedor',
     ],
-    dica: 'Não adivinhe o NCM: ele precisa vir do documento de compra ou ser confirmado pelo contador.',
+    dica: 'Não cadastre 800 itens na mão: o botão Importar aceita CSV e tem modelo pra baixar. As mesmas importações existem em Clientes e em Crediário.',
   },
   {
     fase: 'Vender',

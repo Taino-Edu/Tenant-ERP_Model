@@ -3,8 +3,9 @@ import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell, Tag, GripVertical } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileUp, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell, Tag, GripVertical } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
+import ImportarDados from '@/components/admin/ImportarDados'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import NumberInput from '@/components/admin/ui/NumberInput'
@@ -1004,6 +1005,10 @@ function EstoqueContent() {
     params.get('tab') === 'categorias' ? 'categorias' : 'produtos'
   )
   const [categoriaModal, setCategoriaModal] = useState<Partial<ProductCategory> | null | undefined>(undefined)
+  // Loja sem produto nenhum é o momento em que a importação decide se a pessoa
+  // continua ou desiste, então lá ela aparece sozinha. Com catálogo já montado
+  // vira ruído permanente — daí o botão no cabeçalho.
+  const [mostrarImportacao, setMostrarImportacao] = useState(false)
   const [products, setProducts]       = useState<Product[]>([])
   const [categories, setCategories]   = useState<ProductCategory[]>([])
   const [naturezas, setNaturezas]     = useState<NaturezaOperacaoDto[]>([])
@@ -1141,6 +1146,14 @@ function EstoqueContent() {
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova Categoria</span><span className="sm:hidden">Nova</span>
           </button>
         </> : <>
+          <button
+            onClick={() => setMostrarImportacao(v => !v)}
+            className="btn-secondary"
+            title="Importar produtos de um CSV"
+            aria-expanded={mostrarImportacao || products.length === 0}
+          >
+            <FileUp className="w-4 h-4" /> <span className="hidden sm:inline">Importar</span>
+          </button>
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
           </button>
@@ -1167,6 +1180,14 @@ function EstoqueContent() {
           </button>
         </>}
       />
+
+      {tabSection === 'produtos' && !loading && (mostrarImportacao || products.length === 0) && (
+        <ImportarDados
+          tipos={['produtos']}
+          titulo="Trazer catálogo de uma planilha"
+          descricao="Já tem os produtos em outro sistema ou numa planilha? Suba o CSV em vez de cadastrar um por um. Linhas válidas entram — as com erro aparecem listadas pra você corrigir e reenviar só essas."
+        />
+      )}
 
       {podeVerCategorias && (
         <div className="flex gap-2">
