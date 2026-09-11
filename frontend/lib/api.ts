@@ -851,6 +851,9 @@ export interface TenantSummary {
   monthlyPrice: number
   /** Taxa de implantação cobrada na contratação. */
   setupFee: number
+  /** Primeira mensalidade devida (fim dos 15 dias grátis). O dia desta data é
+   *  o dia de vencimento de toda mensalidade da loja. */
+  billingStartsOn: string | null
 }
 
 export interface CreateTenantRequest {
@@ -899,6 +902,8 @@ export interface UpdateTenantBillingRequest {
    *  era o frontend que nunca mandava, e por isso loja ficava com R$ 0. */
   monthlyPrice?: number
   setupFee?: number
+  /** "AAAA-MM-DD". Omitido preserva a data atual. */
+  billingStartsOn?: string
   /** Omitido/null preserva o limite atual — para remover de vez, use removerMaxUsers. */
   maxUsers?: number | null
   removerMaxUsers?: boolean
@@ -1228,6 +1233,11 @@ export interface TenantChargeDto {
   /** Em aberto e já passou do vencimento — calculado no servidor pra a tela
    *  não reimplementar (e divergir da) regra. */
   vencida: boolean
+  /** Já registrada no gateway. O que ainda não estiver vai no próximo
+   *  "Emitir no Asaas" ou na rodada automática. */
+  emitidaNoGateway: boolean
+  /** Link da fatura no gateway, para mandar ao lojista. */
+  linkPagamento: string | null
 }
 
 export interface BillingResumoDto {
@@ -1253,6 +1263,16 @@ export interface GerarMensalidadesResultDto {
   totalGerado: number
 }
 
+export interface EmissaoGatewayResultDto {
+  /** Cobranças registradas no gateway nesta execução. */
+  emitidas: number
+  /** Em aberto que já tinham id externo e foram puladas. */
+  jaEmitidas: number
+  /** Lojas que não puderam ser cobradas (sem CNPJ, gateway recusou, gateway
+   *  não configurado), já com a razão. */
+  pendencias: string[]
+}
+
 export const platformBillingApi = {
   resumo: (competencia: string) =>
     api.get<BillingResumoDto>('/api/platform/billing/resumo', { params: { competencia } }),
@@ -1262,6 +1282,10 @@ export const platformBillingApi = {
     api.get<TenantChargeDto[]>(`/api/platform/billing/cobrancas/tenant/${tenantId}`),
   gerarMensalidades: (competencia: string) =>
     api.post<GerarMensalidadesResultDto>('/api/platform/billing/gerar-mensalidades', { competencia }),
+  /** Manda agora ao gateway as cobranças em aberto ainda não emitidas. Seguro
+   *  repetir: o backend serializa a emissão e só pega o que não tem id externo. */
+  emitirPendentes: () =>
+    api.post<EmissaoGatewayResultDto>('/api/platform/billing/emitir-pendentes'),
   definirPagamento: (id: string, pagoEm: string | null) =>
     api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}/pagamento`, { pagoEm }),
   // Lançamentos manuais: o gerador cobre o repetitivo, estes cobrem o resto —

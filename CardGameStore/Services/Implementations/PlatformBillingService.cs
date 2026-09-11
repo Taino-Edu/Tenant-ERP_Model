@@ -262,6 +262,8 @@ public class PlatformBillingService : IPlatformBillingService
                       PagoEm      = c.PaidAt,
                       Observacao  = c.Notes,
                       Vencida     = c.PaidAt == null && c.DueDate < hoje,
+                      EmitidaNoGateway = c.ExternalChargeId != null,
+                      LinkPagamento    = c.PaymentUrl,
                   })
             .ToListAsync();
     }
@@ -369,7 +371,30 @@ public class PlatformBillingService : IPlatformBillingService
     // AUTOMAÇÃO DA COBRANÇA (RB-01)
     // =========================================================================
 
+    // Uma emissão por vez neste processo. Enquanto só existia o job de 12 em 12
+    // horas, a rodada era idempotente por construção (só pega cobrança sem id
+    // externo). Com o botão "Emitir no Asaas agora" passaram a existir dois
+    // chamadores, e duas rodadas simultâneas leriam as MESMAS pendentes antes de
+    // qualquer uma gravar o id externo: cada cobrança sairia duas vezes no
+    // gateway — boleto/Pix real em dobro na mão do lojista. Em fila, a segunda
+    // rodada já encontra os ids gravados e não emite nada. Semáforo em memória
+    // basta pelo mesmo motivo do provisionamento: a API roda em instância única.
+    private static readonly SemaphoreSlim _emissaoLock = new(1, 1);
+
     public async Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesAsync(CancellationToken ct = default)
+    {
+        await _emissaoLock.WaitAsync(ct);
+        try
+        {
+            return await EmitirPendentesComTravaAsync(ct);
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
+    }
+
+    private async Task<EmissaoGatewayResultDto> EmitirPendentesComTravaAsync(CancellationToken ct)
     {
         var resultado = new EmissaoGatewayResultDto();
 
@@ -386,7 +411,15 @@ public class PlatformBillingService : IPlatformBillingService
             .OrderBy(c => c.DueDate)
             .ToListAsync(ct);
 
-        if (pendentes.Count == 0) return resultado;
+        if (pendentes.Count == 0)
+        {
+            // Sem este número a resposta de uma rodada vazia era "0 já emitidas"
+            // mesmo com tudo no gateway — e o botão do Financeiro não tinha como
+            // dizer por que não mandou nada.
+            resultado.JaEmitidas = await _catalog.TenantCharges
+                .CountAsync(c => c.PaidAt == null && c.ExternalChargeId != null, ct);
+            return resultado;
+        }
 
         var tenantIds = pendentes.Select(c => c.TenantId).Distinct().ToList();
         var tenants = await _catalog.Tenants

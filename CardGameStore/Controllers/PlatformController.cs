@@ -186,7 +186,13 @@ public class PlatformController : ControllerBase
         // seria erro silencioso e caro — sumiria do MRR sem ninguém notar.
         if (request.MonthlyPrice.HasValue)    tenant.MonthlyPrice    = request.MonthlyPrice.Value;
         if (request.SetupFee.HasValue)        tenant.SetupFee        = request.SetupFee.Value;
-        if (request.BillingStartsOn.HasValue) tenant.BillingStartsOn = request.BillingStartsOn.Value;
+        // A tela manda "2026-10-05": sem fuso (Kind Unspecified), que o Npgsql
+        // recusa gravar em timestamptz. E o dia desta data vira o dia de
+        // vencimento de toda mensalidade da loja, então só o dia importa — hora e
+        // fuso são descartados em vez de convertidos.
+        if (request.BillingStartsOn is { } primeiraCobranca)
+            tenant.BillingStartsOn = new DateTime(
+                primeiraCobranca.Year, primeiraCobranca.Month, primeiraCobranca.Day, 0, 0, 0, DateTimeKind.Utc);
         // A tela de edição de tenant hoje só manda planName/paymentStatus/enabledModules
         // (sem maxUsers) — atribuição direta zeraria um limite já configurado toda vez
         // que o dono só ajusta plano/pagamento. Preserva o valor atual quando omitido;

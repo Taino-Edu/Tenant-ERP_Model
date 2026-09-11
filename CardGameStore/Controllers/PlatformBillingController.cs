@@ -58,6 +58,19 @@ public class PlatformBillingController : ControllerBase
         return Ok(resultado);
     }
 
+    /// <summary>Manda agora para o gateway as cobranças em aberto que ainda não
+    /// foram emitidas, sem esperar a rodada automática de 12 em 12 horas. Seguro
+    /// clicar mais de uma vez: a emissão é serializada e só pega cobrança sem id
+    /// externo.</summary>
+    [HttpPost("emitir-pendentes")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> EmitirPendentes()
+        // Sem o CancellationToken da requisição, de propósito: fechar a aba no
+        // meio da rodada cancelaria o SaveChanges DEPOIS de o gateway já ter
+        // registrado a cobrança, o id externo não seria gravado e a próxima
+        // rodada emitiria a mesma cobrança de novo.
+        => Ok(await _billing.EmitirCobrancasPendentesAsync(CancellationToken.None));
+
     /// <summary>Dá baixa numa cobrança (ou reabre, mandando pagoEm null).</summary>
     [HttpPut("cobrancas/{id:guid}/pagamento")]
     [RequirePlatformPermission(PlatformPermission.FinanceManage)]

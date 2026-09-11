@@ -26,6 +26,14 @@ public class TenantChargeDto
     /// <summary>Em aberto e já passou do vencimento. Calculado no servidor pra a
     /// tela não precisar reimplementar a regra (e divergir dela).</summary>
     public bool Vencida { get; set; }
+
+    /// <summary>Já registrada no gateway (tem id externo). Sem isto a tela não
+    /// tinha como mostrar o que o "Emitir no Asaas" ainda vai mandar.</summary>
+    public bool EmitidaNoGateway { get; set; }
+
+    /// <summary>Link da fatura no gateway — o que se manda ao lojista que diz não
+    /// ter recebido a cobrança.</summary>
+    public string? LinkPagamento { get; set; }
 }
 
 /// <summary>Painel financeiro de um mês de competência.</summary>
