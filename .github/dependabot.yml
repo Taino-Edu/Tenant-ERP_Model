@@ -50,8 +50,27 @@ updates:
       # Versionado junto com o ASP.NET Core, apesar de não ser da Microsoft.
       - dependency-name: "AspNetCore.HealthChecks*"
         update-types: [version-update:semver-major]
+      # A 10 traz o Microsoft.OpenApi 2.x e quebra os filtros do Swagger. No
+      # net8.0 a 6.x atende; a major volta a ser avaliada na migração de
+      # runtime, quando o caminho natural é Microsoft.AspNetCore.OpenApi.
+      - dependency-name: "Swashbuckle.AspNetCore*"
+        update-types: [version-update:semver-major]
+      # A partir da 8 a licença é comercial e paga (Xceed); a 7.x ainda é
+      # livre e continua podendo ser proposta. Depois dela, a alternativa
+      # livre é o fork AwesomeAssertions.
+      - dependency-name: "FluentAssertions"
+        versions: [">= 8.0.0"]
 
+  # Um PR por mês com todas as actions, em vez de um por action.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    ignore:
+      # Usamos a tag flutuante @v4, que já acompanha as minors. Sem isto o
+      # Dependabot propõe fixar numa versão exata a cada release da CodeQL.
+      - dependency-name: "github/codeql-action"
+        update-types: [version-update:semver-minor, version-update:semver-patch]
