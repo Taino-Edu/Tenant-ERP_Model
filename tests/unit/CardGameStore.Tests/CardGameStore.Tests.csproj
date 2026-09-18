@@ -25,7 +25,7 @@
          referencia 8.0.11, e o build para em CS1705 sem executar teste algum. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.30" />
     <!-- Cobertura de código: dotnet test -collect:"XPlat Code Coverage" -->
-    <PackageReference Include="coverlet.collector" Version="6.0.4">
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
