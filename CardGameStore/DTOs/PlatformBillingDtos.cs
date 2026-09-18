@@ -26,6 +26,28 @@ public class TenantChargeDto
     /// <summary>Em aberto e já passou do vencimento. Calculado no servidor pra a
     /// tela não precisar reimplementar a regra (e divergir dela).</summary>
     public bool Vencida { get; set; }
+
+    /// <summary>Já registrada no gateway (tem id externo). Sem isto a tela não
+    /// tinha como mostrar o que o "Emitir no Asaas" ainda vai mandar.</summary>
+    public bool EmitidaNoGateway { get; set; }
+
+    /// <summary>Link da fatura no gateway — o que se manda ao lojista que diz não
+    /// ter recebido a cobrança.</summary>
+    public string? LinkPagamento { get; set; }
+
+    /// <summary>Nasceu das condições comerciais e acompanha renegociação enquanto
+    /// estiver em aberto. False = lançamento manual ou editada à mão.</summary>
+    public bool Automatica { get; set; }
+
+    /// <summary>Valor antes dos descontos (null quando não houve cálculo).</summary>
+    public decimal? ValorBruto { get; set; }
+
+    public decimal Desconto { get; set; }
+    public string? DescricaoDesconto { get; set; }
+
+    /// <summary>Número da parcela da implantação, e o total delas.</summary>
+    public int? Parcela { get; set; }
+    public int? TotalParcelas { get; set; }
 }
 
 /// <summary>Painel financeiro de um mês de competência.</summary>
@@ -77,7 +99,28 @@ public class GerarMensalidadesResultDto
     /// (15 dias de acesso grátis) ou por não terem mensalidade definida.</summary>
     public int ForaDeCobranca { get; set; }
 
+    /// <summary>Lojas cuja mensalidade do mês ficou em zero pelos descontos
+    /// vigentes — nenhuma cobrança é criada pra elas.</summary>
+    public int ZeradasPorDesconto { get; set; }
+
+    /// <summary>Quantas das criadas são parcelas de implantação.</summary>
+    public int ParcelasDeImplantacao { get; set; }
+
     public decimal TotalGerado { get; set; }
+}
+
+/// <summary>O que o recálculo fez com as cobranças de uma loja depois de uma
+/// mudança nas condições comerciais.</summary>
+public class SincronizacaoCobrancasResultDto
+{
+    public int Criadas { get; set; }
+    public int Atualizadas { get; set; }
+    public int Removidas { get; set; }
+
+    /// <summary>Cobranças que deveriam mudar e ficaram como estavam — quase
+    /// sempre fatura emitida que o gateway não deixou cancelar (já paga, ou
+    /// gateway fora do ar). Com a razão, pra quem negociou saber o que conferir.</summary>
+    public List<string> Pendencias { get; set; } = new();
 }
 
 public class DefinirPagamentoRequest

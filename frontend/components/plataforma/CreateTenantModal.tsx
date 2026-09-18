@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { platformApi, getErrorMessage, TENANT_MODULES, type TenantKind } from '@/lib/api'
-import { PLANOS, PLANO_PERSONALIZADO, taxaImplantacao, formatarReais, type Plano } from '@/lib/planos'
+import { PLANOS, PLANO_PERSONALIZADO, formatarReais, type Plano } from '@/lib/planos'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Loader2, X, Check, Server, Unplug, Store } from 'lucide-react'
 import clsx from 'clsx'
@@ -141,14 +141,12 @@ export default function CreateTenantModal({
                   <span className="block text-sm font-semibold text-brand-300 tabular-nums">
                     {formatarReais(plano.preco)}<span className="text-xs font-normal text-gray-500">/mês</span>
                   </span>
-                  <span className="block text-xs text-gray-500">
-                    {plano.taxaImplantacao === 0
-                      ? 'Implantação gratuita'
-                      : `+ ${formatarReais(taxaImplantacao(plano))} de implantação`}
-                  </span>
                 </button>
               ))}
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              A loja nasce sem implantação. Se houver, defina o valor na lista de lojas ou lance a cobrança no Financeiro.
+            </p>
             {planName === PLANO_PERSONALIZADO && (
               <p className="text-xs text-amber-400 mt-1">
                 Sem plano de tabela, a loja nasce com mensalidade R$ 0 — defina o valor no painel depois de criar.

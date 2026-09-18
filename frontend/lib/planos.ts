@@ -19,10 +19,12 @@ export interface Plano {
   preco: number
   publico: string
   destaque: boolean
-  /** Valor de tabela da implantação, cobrado uma vez. É ponto de partida, não
-   *  regra: a taxa é moeda de negociação e o painel da plataforma permite
-   *  ajustá-la por loja, inclusive zerar. Zero aqui significaria implantação
-   *  gratuita anunciada no site — hoje nenhum plano está assim. */
+  /** Implantação de tabela, cobrada uma vez. Zero em todos os planos desde
+   *  2026-09-11: a loja nasce pelo site, criada pelo próprio lojista, sem taxa.
+   *  Quando uma loja específica tiver implantação (migração assistida,
+   *  treinamento), o valor é definido no painel da plataforma, loja a loja — não
+   *  aqui. O campo continua existindo porque o simulador de parceiros e
+   *  TabelaPrecosSincronizadaTests leem dele. */
   taxaImplantacao: number
   /** Texto do limite de usuários, pro site. */
   usuarios: string
@@ -33,20 +35,13 @@ export interface Plano {
   inclui: string[]
 }
 
-/** Duas mensalidades, em tabela e no personalizado — os três planos seguem a
- * mesma conta desde que o Mar deixou de ter implantação gratuita. O catálogo
- * continua sendo a fonte para os planos de tabela, pra que um valor negociado
- * possa divergir do dobro sem que este helper o sobrescreva. */
-export const taxaImplantacao = (planoOuPreco: Plano | number) =>
-  typeof planoOuPreco === 'number' ? planoOuPreco * 2 : planoOuPreco.taxaImplantacao
-
 export const PLANOS: Plano[] = [
   {
     nome: 'Lagoa',
     preco: 129,
     publico: 'Pra loja que quer sair da planilha e do caderno.',
     destaque: false,
-    taxaImplantacao: 258,
+    taxaImplantacao: 0,
     usuarios: '2 usuários no painel',
     maxUsers: 2,
     modules: ['fiscal', 'estoque', 'restaurante'],
@@ -64,7 +59,7 @@ export const PLANOS: Plano[] = [
     preco: 269,
     publico: 'A operação que já vende todo dia e precisa de controle.',
     destaque: true,
-    taxaImplantacao: 538,
+    taxaImplantacao: 0,
     usuarios: '6 usuários no painel',
     maxUsers: 6,
     modules: ['fiscal', 'estoque', 'restaurante', 'pontos', 'contador', 'eventos'],
@@ -83,7 +78,7 @@ export const PLANOS: Plano[] = [
     preco: 487,
     publico: 'Pra quem tem mais de um ponto ou quer automatizar.',
     destaque: false,
-    taxaImplantacao: 974,
+    taxaImplantacao: 0,
     usuarios: 'Usuários ilimitados',
     maxUsers: null,
     // Restaurante é adicional opt-in: nem o plano mais alto o liga sozinho.

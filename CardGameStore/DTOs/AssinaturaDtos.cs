@@ -55,6 +55,15 @@ public class FaturaDto
     /// <summary>Link de pagamento do gateway. Null quando a cobrança ainda não
     /// foi emitida (dados de faturamento incompletos, ou o job ainda não rodou).</summary>
     public string? LinkDePagamento { get; set; }
+
+    /// <summary>Quanto os descontos negociados tiraram, e quais foram. É o que
+    /// explica ao lojista uma fatura menor que a mensalidade do plano.</summary>
+    public decimal Desconto { get; set; }
+    public string? DescricaoDesconto { get; set; }
+
+    /// <summary>Parcela da implantação ("2 de 3"), quando parcelada.</summary>
+    public int? Parcela { get; set; }
+    public int? TotalParcelas { get; set; }
 }
 
 public class AtualizarFaturamentoRequest

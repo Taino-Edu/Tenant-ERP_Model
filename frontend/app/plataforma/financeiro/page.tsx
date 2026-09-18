@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   Wallet, TrendingUp, AlertTriangle, CircleDollarSign, RefreshCw,
-  Check, Undo2, Calendar, Store, Plus, Pencil, Trash2,
+  Calendar, Store, Plus, Send, X,
 } from 'lucide-react'
 import {
   platformBillingApi, platformApi, getErrorMessage,
@@ -20,29 +20,15 @@ import {
 } from '@/lib/api'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import Button from '@/components/admin/ui/Button'
-import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 import CobrancaFormModal from '@/components/plataforma/CobrancaFormModal'
-import DataTable from '@/components/admin/ui/DataTable'
+import CobrancasTabela, { brl } from '@/components/plataforma/CobrancasTabela'
 import EmptyState from '@/components/admin/ui/EmptyState'
-import Modal from '@/components/admin/ui/Modal'
 import Spinner from '@/components/admin/ui/Spinner'
-
-const brl = (v: number) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 /** "2026-07" — o input month e a API trabalham no mesmo formato. */
 function competenciaAtual(): string {
   const hoje = new Date()
   return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
-}
-
-/** Data só-dia, sem fuso: as datas de cobrança vêm em UTC 00:00 e o
- *  toLocaleDateString do navegador jogaria pro dia anterior em fusos negativos
- *  (o Brasil inteiro). Formatar a partir das partes evita o vencimento aparecer
- *  um dia antes do que é. */
-function dataCurta(iso: string): string {
-  const [ano, mes, dia] = iso.slice(0, 10).split('-')
-  return `${dia}/${mes}/${ano}`
 }
 
 export default function FinanceiroPlataformaPage() {
@@ -51,11 +37,12 @@ export default function FinanceiroPlataformaPage() {
   const [cobrancas, setCobrancas]     = useState<TenantChargeDto[]>([])
   const [loading, setLoading]         = useState(true)
   const [gerando, setGerando]         = useState(false)
-  const [salvandoId, setSalvandoId]   = useState<string | null>(null)
+  const [emitindo, setEmitindo]       = useState(false)
+  // Pendências da última emissão (loja sem CNPJ, gateway recusou). Ficam na
+  // tela até alguém fechar: num toast sumiriam antes de dar para anotar quais
+  // lojas precisam de ação.
+  const [pendencias, setPendencias]   = useState<string[]>([])
   const [criando, setCriando]         = useState(false)
-  const [editando, setEditando]       = useState<TenantChargeDto | null>(null)
-  const [excluindo, setExcluindo]     = useState<TenantChargeDto | null>(null)
-  const [removendo, setRemovendo]     = useState(false)
   // Só é buscada quando o formulário de lançamento abre: a tela de financeiro
   // não precisa da lista de lojas para nada além disso, e carregá-la no load
   // pagaria a consulta em toda visita para um botão que quase nunca é clicado.
@@ -107,6 +94,28 @@ export default function FinanceiroPlataformaPage() {
     }
   }
 
+  async function emitirPendentes() {
+    setEmitindo(true)
+    try {
+      const { data } = await platformBillingApi.emitirPendentes()
+      setPendencias(data.pendencias)
+      // Mesma regra do "Gerar mensalidades": dizer o que aconteceu inclusive
+      // quando não aconteceu nada, senão o clique parece não ter funcionado.
+      if (data.emitidas > 0) {
+        toast.success(`${data.emitidas} cobrança(s) emitida(s) no Asaas.`)
+      } else if (data.pendencias.length === 0) {
+        toast('Nada a emitir: as cobranças em aberto já estão no Asaas.')
+      } else {
+        toast.error('Nenhuma cobrança foi emitida. Veja as pendências na tela.')
+      }
+      await carregar(competencia)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Não deu pra emitir as cobranças.'))
+    } finally {
+      setEmitindo(false)
+    }
+  }
+
   async function abrirLancamento() {
     setCriando(true)
     if (lojas.length === 0) {
@@ -117,34 +126,6 @@ export default function FinanceiroPlataformaPage() {
         // O formulário abre mesmo assim, mostrando o aviso de lista vazia —
         // fechar o modal por causa disso deixaria o clique sem resposta.
       }
-    }
-  }
-
-  async function excluirCobranca() {
-    if (!excluindo) return
-    setRemovendo(true)
-    try {
-      await platformBillingApi.excluirCobranca(excluindo.id)
-      toast.success('Cobrança excluída.')
-      setExcluindo(null)
-      await carregar(competencia)
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Não deu pra excluir a cobrança.'))
-    } finally {
-      setRemovendo(false)
-    }
-  }
-
-  async function alternarPagamento(c: TenantChargeDto) {
-    setSalvandoId(c.id)
-    try {
-      const hoje = new Date().toISOString().slice(0, 10)
-      await platformBillingApi.definirPagamento(c.id, c.pagoEm ? null : hoje)
-      await carregar(competencia)
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Não deu pra atualizar a cobrança.'))
-    } finally {
-      setSalvandoId(null)
     }
   }
 
@@ -181,6 +162,13 @@ export default function FinanceiroPlataformaPage() {
                 <RefreshCw className="w-4 h-4" />
                 Gerar mensalidades
               </Button>
+              {/* Sem isto, cobrança lançada à mão só ia ao Asaas na rodada
+                  automática, até 12 horas depois. */}
+              <Button variant="secondary" onClick={emitirPendentes} loading={emitindo}
+                title="Manda ao Asaas as cobranças em aberto que ainda não foram emitidas">
+                <Send className="w-4 h-4" />
+                Emitir no Asaas
+              </Button>
               <Button variant="secondary" onClick={abrirLancamento}>
                 <Plus className="w-4 h-4" />
                 Nova cobrança
@@ -189,6 +177,28 @@ export default function FinanceiroPlataformaPage() {
           )}
         </div>
       </div>
+
+      {pendencias.length > 0 && (
+        <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+                <AlertTriangle className="h-4 w-4" />
+                Não foram ao Asaas na última emissão
+              </p>
+              <ul className="mt-2 space-y-1 text-sm text-amber-100/90">
+                {/* Índice como chave: a mesma loja pode repetir a mesma razão,
+                    uma vez por cobrança recusada. */}
+                {pendencias.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </div>
+            <button type="button" onClick={() => setPendencias([])} aria-label="Fechar pendências"
+              className="text-amber-200 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
@@ -242,57 +252,15 @@ export default function FinanceiroPlataformaPage() {
                   : 'Nenhuma cobrança gerada para este mês.'}
               />
             ) : (
-              /* Esta tela já tinha tabela e cards, mas escritos à mão em
-                 paralelo — duas marcações pra mesma lista, que só ficariam
-                 iguais por disciplina (o card já omitia o slug do tenant, por
-                 exemplo). Agora as duas saem da mesma definição de colunas. */
-              <DataTable
+              /* A tabela, as ações de cada linha e os diálogos de alterar e
+                 excluir moram em CobrancasTabela: a aba Cobranças da página da
+                 loja usa a mesma lista, e duas cópias só ficariam iguais por
+                 disciplina. */
+              <CobrancasTabela
                 className="pt-3 sm:pt-0"
-                rows={cobrancas}
-                rowKey={c => c.id}
-                // `undefined` e não uma função que devolve null: é assim que o
-                // DataTable deixa de reservar a coluna de ações inteira.
-                rowActions={podeLancar ? c => (
-                  <div className="flex items-center gap-1.5">
-                    <AcaoPagamento
-                      c={c}
-                      salvando={salvandoId === c.id}
-                      onClick={() => alternarPagamento(c)}
-                    />
-                    {/* Editar e excluir só aparecem em cobrança EM ABERTO. A API
-                        recusa as duas numa cobrança paga — a baixa já pode ter
-                        liberado comissão de parceiro —, e oferecer o botão para
-                        depois devolver erro é pior que não oferecer. */}
-                    {!c.pagoEm && (
-                      <>
-                        <Button size="sm" variant="secondary" onClick={() => setEditando(c)}
-                          aria-label={`Editar cobrança de ${c.tenantNome}`}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={() => setExcluindo(c)}
-                          aria-label={`Excluir cobrança de ${c.tenantNome}`}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                ) : undefined}
-                columns={[
-                  { key: 'loja', header: 'Loja', mobile: 'title',
-                    cell: c => (
-                      <>
-                        <p className="font-medium text-white">{c.tenantNome}</p>
-                        <p className="text-xs text-gray-500">{c.tenantSlug}</p>
-                      </>
-                    ) },
-                  { key: 'valor', header: 'Valor', align: 'right', mobile: 'trailing',
-                    cell: c => <span className="font-semibold tabular-nums text-white">{brl(c.valor)}</span> },
-                  { key: 'tipo', header: 'Tipo', mobile: 'meta', className: 'text-gray-300',
-                    cell: c => c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade' },
-                  { key: 'vencimento', header: 'Vencimento', mobile: 'meta', className: 'text-gray-300',
-                    cell: c => <>vence {dataCurta(c.vencimento)}</> },
-                  { key: 'situacao', header: 'Situação', mobile: 'field', cell: c => <Situacao c={c} /> },
-                ]}
+                cobrancas={cobrancas}
+                podeLancar={podeLancar}
+                onAlterado={() => carregar(competencia)}
               />
             )}
           </div>
@@ -305,30 +273,13 @@ export default function FinanceiroPlataformaPage() {
         </>
       )}
 
-      {(criando || editando) && (
+      {criando && (
         <CobrancaFormModal
-          cobranca={editando}
+          cobranca={null}
           lojas={lojas}
           competencia={competencia}
-          onClose={() => { setCriando(false); setEditando(null) }}
+          onClose={() => setCriando(false)}
           onSalvo={() => carregar(competencia)}
-        />
-      )}
-
-      {excluindo && (
-        <ConfirmDialog
-          title="Excluir cobrança"
-          message={
-            <>
-              Excluir a cobrança de <strong>{brl(excluindo.valor)}</strong> de{' '}
-              <strong>{excluindo.tenantNome}</strong>? A cobrança some do histórico da loja
-              e do faturado do mês. Isso não pode ser desfeito.
-            </>
-          }
-          confirmLabel="Excluir"
-          loading={removendo}
-          onConfirm={excluirCobranca}
-          onClose={() => setExcluindo(null)}
         />
       )}
     </div>
@@ -358,48 +309,5 @@ function Card({
       <p className={`mt-2 text-2xl font-bold tabular-nums ${cor}`}>{valor}</p>
       {detalhe && <p className="mt-1 text-xs text-gray-500">{detalhe}</p>}
     </div>
-  )
-}
-
-function Situacao({ c }: { c: TenantChargeDto }) {
-  if (c.pagoEm) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-green/15 px-2.5 py-1 text-xs font-semibold text-accent-green">
-        Pago em {dataCurta(c.pagoEm)}
-      </span>
-    )
-  }
-  if (c.vencida) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-red/15 px-2.5 py-1 text-xs font-semibold text-accent-red">
-        <AlertTriangle className="h-3 w-3" /> Vencida
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center rounded-full bg-surface-600 px-2.5 py-1 text-xs font-semibold text-gray-300">
-      Em aberto
-    </span>
-  )
-}
-
-function AcaoPagamento({
-  c, salvando, onClick,
-}: {
-  c: TenantChargeDto
-  salvando: boolean
-  onClick: () => void
-}) {
-  return (
-    <Button
-      size="sm"
-      variant={c.pagoEm ? 'secondary' : 'success'}
-      loading={salvando}
-      onClick={onClick}
-      aria-label={c.pagoEm ? `Reabrir cobrança de ${c.tenantNome}` : `Dar baixa na cobrança de ${c.tenantNome}`}
-    >
-      {c.pagoEm ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
-      {c.pagoEm ? 'Reabrir' : 'Dar baixa'}
-    </Button>
   )
 }

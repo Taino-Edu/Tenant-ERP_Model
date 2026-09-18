@@ -6,10 +6,14 @@ export function isPublicTenantPage(path: string): boolean {
   return !/^\/(?:api|_next|uploads|hubs|health|mcp|admin|plataforma|contador|cliente)(?:\/|$)/.test(path)
 }
 
+/** 'suspensa' é um 404 para a vitrine, com uma exceção: o /login, por onde o
+ *  dono entra para pagar e reativar a loja (ver middleware.ts). */
+export type TenantPageStatus = 200 | 404 | 503 | 'suspensa'
+
 export async function tenantPageStatus(
   host: string | null,
   fetcher: typeof fetch = fetch,
-): Promise<200 | 404 | 503> {
+): Promise<TenantPageStatus> {
   const slug = extractSlug(host)
   // Domínio principal e domínios próprios não são resolvidos por slug.
   if (!slug) return 200
@@ -21,7 +25,7 @@ export async function tenantPageStatus(
     const data = await response.json()
     // Só um erro de negócio explícito autoriza 404. Um proxy/endpoint ausente,
     // timeout ou 5xx nunca deve retirar uma loja válida do índice.
-    if (response.status === 404 && data?.errorCode === 'tenant_unavailable') return 404
+    if (response.status === 404 && data?.errorCode === 'tenant_unavailable') return data?.suspended === true ? 'suspensa' : 404
     if (response.ok && typeof data?.siteName === 'string' && data.siteName.trim()) return 200
   } catch {
     // Disponibilidade primeiro: a API pode estar saudável para o navegador,

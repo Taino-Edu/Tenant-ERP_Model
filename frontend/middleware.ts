@@ -41,7 +41,11 @@ export async function middleware(request: NextRequest) {
 
   if ((request.method === 'GET' || request.method === 'HEAD') && isPublicTenantPage(request.nextUrl.pathname)) {
     const status = await tenantPageStatus(request.headers.get('host'))
-    if (status !== 200) return tenantErrorResponse(status, request.method === 'HEAD')
+    // Loja suspensa por atraso sai do ar, menos a porta do dono: sem o /login
+    // ele não teria como entrar, ver a fatura e pagar. O resto do painel é
+    // barrado pela API (só a Assinatura responde).
+    if (status === 'suspensa' && request.nextUrl.pathname === '/login') return NextResponse.next()
+    if (status !== 200) return tenantErrorResponse(status === 'suspensa' ? 404 : status, request.method === 'HEAD')
   }
   return NextResponse.next()
 }

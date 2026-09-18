@@ -31,8 +31,34 @@ public interface IEmailService
     /// <summary>Envia o código de uso único que confirma o aceite do regulamento.</summary>
     Task SendReferralSignatureCodeAsync(string toEmail, string toName, string code, DateTime expiresAt);
 
+    /// <summary>Envia o link que confirma o e-mail e cria a loja pedida pelo site.</summary>
+    /// <remarks>Com requireDelivery, lança se não houver SMTP ou o envio falhar, para quem
+    /// pediu saber na hora que o link não vai chegar.</remarks>
+    Task SendTenantSignupConfirmationAsync(
+        string toEmail, string toName, string storeName, string storeAddress, string confirmUrl,
+        DateTime expiresAt, bool requireDelivery);
+
     /// <summary>Envia email de boas-vindas após primeiro login via QR Code.</summary>
     Task SendWelcomeAsync(string toEmail, string toName);
+
+    // ── Cobrança da plataforma contra a loja ─────────────────────────────────
+    // Marca da plataforma, não da loja: quem cobra somos nós. Enviados num
+    // escopo do tenant-zero (PlatformBillingNotifier), senão sairiam pelo SMTP
+    // que a loja configurou para os clientes dela.
+
+    /// <summary>O teste está acabando (ou acabou) e a loja não informou CPF/CNPJ
+    /// — sem isso a fatura não pode ser emitida.</summary>
+    Task SendCobrancaDadosFaltandoAsync(
+        string toEmail, string toName, string storeName, DateTime primeiraCobranca, string assinaturaUrl);
+
+    /// <summary>Fatura vencida perto de a carência acabar.</summary>
+    Task SendCobrancaAvisoSuspensaoAsync(
+        string toEmail, string toName, string storeName, decimal valor, DateTime vencimento,
+        DateTime suspensaoEm, string? linkPagamento, string assinaturaUrl);
+
+    Task SendLojaSuspensaAsync(string toEmail, string toName, string storeName, string assinaturaUrl);
+
+    Task SendLojaReativadaAsync(string toEmail, string toName, string storeName, string lojaUrl);
 
     // ── Crediário ─────────────────────────────────────────────────────────────
 

@@ -31,26 +31,41 @@ function vencimentoSugerido(mes: string): string {
 }
 
 export default function CobrancaFormModal({
-  cobranca, lojas, competencia, onClose, onSalvo,
+  cobranca, lojas = [], tenantFixo = null, competencia, onClose, onSalvo,
 }: {
   /** null = nova cobrança; preenchido = alteração. */
   cobranca: TenantChargeDto | null
-  lojas: TenantSummary[]
-  /** Competência aberta na tela, no formato "2026-07". */
+  /** Lojas do seletor. Ignorado quando `tenantFixo` vem preenchido. */
+  lojas?: TenantSummary[]
+  /** Lançamento feito da página de uma loja: a loja já está decidida. */
+  tenantFixo?: { id: string; slug: string } | null
+  /** Mês sugerido para a competência, no formato "2026-07". */
   competencia: string
   onClose: () => void
   onSalvo: () => void
 }) {
   const editando = cobranca !== null
 
-  const [tenantId, setTenantId]     = useState(cobranca?.tenantId ?? '')
+  const [tenantId, setTenantId]     = useState(cobranca?.tenantId ?? tenantFixo?.id ?? '')
   const [tipo, setTipo]             = useState<'Mensalidade' | 'Implantacao'>(
     (cobranca?.tipo as 'Mensalidade' | 'Implantacao') ?? 'Mensalidade')
+  // Competência editável no lançamento: na página de uma loja não existe "mês
+  // aberto na tela" para herdar, e implantação costuma cair num mês diferente
+  // do que se está olhando.
+  const [mes, setMes]               = useState(competencia)
   const [valor, setValor]           = useState(cobranca ? String(cobranca.valor) : '')
   const [vencimento, setVencimento] = useState(
     cobranca ? cobranca.vencimento.slice(0, 10) : vencimentoSugerido(competencia))
+  const [vencimentoTocado, setVencimentoTocado] = useState(editando)
   const [observacao, setObservacao] = useState(cobranca?.observacao ?? '')
   const [salvando, setSalvando]     = useState(false)
+
+  function alterarMes(novo: string) {
+    setMes(novo)
+    // Enquanto ninguém mexeu no vencimento ele acompanha a competência; depois
+    // de escolhido à mão, trocar o mês não pode apagar o que foi digitado.
+    if (novo && !vencimentoTocado) setVencimento(vencimentoSugerido(novo))
+  }
 
   async function submeter(event: FormEvent) {
     event.preventDefault()
@@ -70,7 +85,7 @@ export default function CobrancaFormModal({
       } else {
         await platformBillingApi.criarCobranca({
           tenantId, tipo, valor: valorNumerico,
-          competencia: primeiroDia(competencia), vencimento,
+          competencia: primeiroDia(mes), vencimento,
           observacao: observacao.trim() || undefined,
         })
         toast.success('Cobrança lançada.')
@@ -87,9 +102,10 @@ export default function CobrancaFormModal({
     }
   }
 
+  // Só existe na alteração: no lançamento a competência é um campo editável.
   const rotuloCompetencia = editando
     ? cobranca.competencia.slice(0, 7).split('-').reverse().join('/')
-    : competencia.split('-').reverse().join('/')
+    : ''
 
   return (
     <Modal onClose={onClose} maxWidth="md" closeOnBackdrop={false}
@@ -108,27 +124,34 @@ export default function CobrancaFormModal({
           </div>
         ) : (
           <>
-            <label className="block text-sm font-medium text-gray-300">
-              Loja
-              <select required value={tenantId} onChange={e => setTenantId(e.target.value)}
-                className="input mt-2 w-full">
-                <option value="" disabled>Selecione a loja</option>
-                {/* `TenantSummary` não traz o nome de exibição, só o slug — que
-                    é como a loja é identificada no resto deste painel. O plano
-                    vai junto porque duas lojas de nome parecido são o caso em
-                    que se lança cobrança na errada. */}
-                {lojas.map(loja => (
-                  <option key={loja.id} value={loja.id}>
-                    {loja.slug}{loja.planName ? ` · ${loja.planName}` : ''}
-                  </option>
-                ))}
-              </select>
-              {lojas.length === 0 && (
-                <span className="mt-1 block text-xs text-amber-300">
-                  Não consegui carregar a lista de lojas. Feche e abra de novo.
-                </span>
-              )}
-            </label>
+            {tenantFixo ? (
+              <div className="rounded-xl border border-surface-600 bg-surface-900 p-3 text-sm">
+                <p className="text-xs text-gray-500">Loja</p>
+                <p className="font-medium text-white">{tenantFixo.slug}</p>
+              </div>
+            ) : (
+              <label className="block text-sm font-medium text-gray-300">
+                Loja
+                <select required value={tenantId} onChange={e => setTenantId(e.target.value)}
+                  className="input mt-2 w-full">
+                  <option value="" disabled>Selecione a loja</option>
+                  {/* `TenantSummary` não traz o nome de exibição, só o slug — que
+                      é como a loja é identificada no resto deste painel. O plano
+                      vai junto porque duas lojas de nome parecido são o caso em
+                      que se lança cobrança na errada. */}
+                  {lojas.map(loja => (
+                    <option key={loja.id} value={loja.id}>
+                      {loja.slug}{loja.planName ? ` · ${loja.planName}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {lojas.length === 0 && (
+                  <span className="mt-1 block text-xs text-amber-300">
+                    Não consegui carregar a lista de lojas. Feche e abra de novo.
+                  </span>
+                )}
+              </label>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm font-medium text-gray-300">
@@ -141,9 +164,10 @@ export default function CobrancaFormModal({
               </label>
               <label className="block text-sm font-medium text-gray-300">
                 Competência
-                <input readOnly value={rotuloCompetencia} className="input mt-2 w-full opacity-70" />
+                <input required type="month" value={mes} onChange={e => alterarMes(e.target.value)}
+                  className="input mt-2 w-full" />
                 <span className="mt-1 block text-xs text-gray-500">
-                  É o mês aberto na tela. Troque lá em cima para lançar em outro.
+                  Mês a que a cobrança se refere. Cada loja tem uma de cada tipo por mês.
                 </span>
               </label>
             </div>

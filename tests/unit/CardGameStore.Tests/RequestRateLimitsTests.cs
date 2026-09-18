@@ -34,6 +34,8 @@ public sealed class RequestRateLimitsTests : IDisposable
     [InlineData("locate-account", 5)]
     [InlineData("comanda-hub", 30)]
     [InlineData("public-lead", 5)]
+    [InlineData("public-signup", 5)]
+    [InlineData("public-signup-check", 30)]
     [InlineData("public-ai", 10)]
     [InlineData("integration-token", 10)]
     public void ExhaustingOneIpDoesNotBlockAnother(string policy, int permits)

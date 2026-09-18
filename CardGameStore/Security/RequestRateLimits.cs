@@ -41,6 +41,12 @@ public static class RequestRateLimits
             "integration-token" => (ClientIp(context), 10, TimeSpan.FromMinutes(1), 0),
             "public-ai" => (ClientIp(context), 10, TimeSpan.FromMinutes(1), 0),
             "public-lead" => (ClientIp(context), 5, TimeSpan.FromMinutes(15), 0),
+            // Pedir loja manda e-mail e reserva endereço; confirmar cria um schema
+            // inteiro. Bem mais caro que um lead, daí a janela de uma hora.
+            "public-signup" => (ClientIp(context), 5, TimeSpan.FromHours(1), 0),
+            // Consulta de endereço acompanha a digitação (com debounce) e também
+            // cobre a confirmação do link, que carrega token de 256 bits.
+            "public-signup-check" => (ClientIp(context), 30, TimeSpan.FromMinutes(1), 0),
             // Busca de conta percorre tenants: limite por IP independente de loja.
             "locate-account" => (ClientIp(context), 5, TimeSpan.FromHours(1), 0),
             "comanda-hub" => (TenantUserOrIp(context), 30, TimeSpan.FromMinutes(1), 0),
@@ -58,7 +64,7 @@ public static class RequestRateLimits
     public static void Configure(RateLimiterOptions options)
     {
         options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context => Partition(context, "global"));
-        foreach (var name in new[] { "auth", "api", "integration-token", "public-ai", "public-lead", "locate-account", "comanda-hub" })
+        foreach (var name in new[] { "auth", "api", "integration-token", "public-ai", "public-lead", "public-signup", "public-signup-check", "locate-account", "comanda-hub" })
             options.AddPolicy(name, context => Partition(context, name));
 
         options.OnRejected = RejectAsync;

@@ -114,10 +114,20 @@ public class TenantResolutionMiddleware
 
         if (tenant is not null)
         {
-            if (tenant.Status != TenantStatus.Active)
+            // Loja suspensa fica fora do ar, com uma exceção estreita: o dono
+            // precisa conseguir entrar e pagar. Sem ela a suspensão por atraso
+            // não tinha saída pelo sistema — o painel inteiro respondia 403,
+            // inclusive a tela da fatura, e só restava o e-mail do gateway.
+            if (tenant.Status != TenantStatus.Active && !IsAllowedWhileSuspended(context.Request.Path))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
+                // errorCode é o que o front usa para mandar o admin logado para a
+                // tela de Assinatura em vez de mostrar erro em cada chamada.
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    Message   = "Esta loja está temporariamente suspensa.",
+                    ErrorCode = "tenant_suspended",
+                });
                 return;
             }
 
@@ -275,6 +285,20 @@ public class TenantResolutionMiddleware
         !string.IsNullOrWhiteSpace(rootDomain)
         && (host.Equals(rootDomain, StringComparison.OrdinalIgnoreCase)
             || host.Equals($"www.{rootDomain}", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>O que uma loja suspensa ainda responde: entrar, manter e encerrar
+    /// a sessão, e a tela de Assinatura. A autorização continua sendo a de
+    /// sempre — o AssinaturaController só aceita o Admin da própria loja, então
+    /// cliente e operador entram mas não chegam a nada.
+    ///
+    /// Lista exata, e não prefixo amplo como "/api/auth": cadastro de cliente,
+    /// quick-login da mesa e recuperação de conta não têm por que funcionar numa
+    /// loja fora do ar.</summary>
+    internal static bool IsAllowedWhileSuspended(PathString path) =>
+        path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/auth/refresh", StringComparison.OrdinalIgnoreCase)
+        || path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/api/assinatura", StringComparison.OrdinalIgnoreCase);
 
     internal static bool IsSlugResolvedPublicPath(PathString path) =>
         path.Equals("/api/public/site-icons", StringComparison.OrdinalIgnoreCase)

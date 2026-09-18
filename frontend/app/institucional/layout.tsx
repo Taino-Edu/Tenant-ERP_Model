@@ -95,8 +95,9 @@ const softwareApplicationSchema = {
   // `price` sozinho é lido como preço à vista: o resultado de busca mostraria
   // "R$ 129" para um plano que custa R$ 129 POR MÊS. O `priceSpecification`
   // com `unitCode: 'MON'` (mês, código UN/CEFACT) é o que diz a recorrência.
-  // A taxa de implantação não entra: ela é negociada por contrato e não tem
-  // valor único para anunciar — está respondida no FAQPage abaixo.
+  // Sem taxa de implantação: desde 2026-09-11 a loja nasce pelo site sem ela.
+  // Quando uma loja específica tiver implantação, o valor é negociado e não
+  // tem número único para anunciar — por isso nunca entra aqui.
   offers: [
     ['Plano Lagoa', '129'],
     ['Plano Rio', '269'],
@@ -117,10 +118,10 @@ const faqSchema = {
     ['Quando começa a cobrança do Octus?', 'Todos os planos têm 15 dias grátis. A primeira mensalidade é cobrada no 16º dia.'],
     ['O Octus substitui a marca da minha loja?', 'Não. Nome, logo, cores e domínio personalizados pelo cliente sempre têm prioridade sobre a identidade padrão Octus.'],
     ['O Octus atende restaurantes?', 'Sim. O módulo de restaurante é opcional e habilitado apenas para os clientes que escolherem utilizá-lo.'],
-    // Entra aqui porque é a primeira pergunta de quem lê "+ taxa de implantação"
-    // na tabela e não vê valor. Sem valor no schema de propósito: a taxa é
-    // negociada por contrato, e número no resultado de busca vira promessa.
-    ['O Octus tem taxa de implantação?', 'Sim. Todos os planos têm taxa de implantação, cobrada uma única vez. O valor é definido na contratação, conforme o porte da operação, e confirmado pelo Marketing.'],
+    // Continua porque é pergunta frequente de quem compara ERP, e a resposta
+    // mudou em 2026-09-11: antes afirmava taxa em todos os planos. Mesma
+    // resposta do FAQ visível da página (FAQS em page.tsx).
+    ['O Octus tem taxa de implantação?', 'Não para começar. Você cria a loja pelo site, testa por 15 dias sem cartão e só paga a mensalidade do plano se continuar.'],
     ['Como funciona o Programa Clientes Fundadores?', 'Clientes do estado de São Paulo têm 30% de desconto nas quatro primeiras mensalidades. Cada indicação fechada acrescenta 10% no mesmo período, até 100%.'],
   ].map(([name, text]) => ({
     '@type': 'Question', name,

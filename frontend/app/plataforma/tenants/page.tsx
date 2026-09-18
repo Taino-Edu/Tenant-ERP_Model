@@ -15,7 +15,7 @@ import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle, Store, EyeOff } from 'lucide-react'
 import clsx from 'clsx'
-import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao } from '@/lib/planos'
+import { PLANOS, PLANO_PERSONALIZADO, acharPlano } from '@/lib/planos'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -186,6 +186,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   const [showModules, setShowModules] = useState(false)
   const [mensalidade, setMensalidade] = useState(String(tenant.monthlyPrice ?? 0))
   const [implantacao, setImplantacao] = useState(String(tenant.setupFee ?? 0))
+  // "AAAA-MM-DD", o formato do <input type="date">; a API manda com hora UTC.
+  const [primeiraCobranca, setPrimeiraCobranca] = useState(tenant.billingStartsOn?.slice(0, 10) ?? '')
 
   // O requisito do logo aparece no próprio botão, e não só num toast que some:
   // quem abre a tela depois precisa entender por que a loja está autorizada e
@@ -196,9 +198,13 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       ? 'Remover da vitrine de clientes'
       : 'Autorizada, mas sem logo — a loja só aparece na vitrine depois que o lojista cadastrar o logo. Clique para remover a autorização.'
 
-  /** Trocar de plano aplica o preço de tabela junto — era exatamente isso que
-   *  faltava: o nome mudava e o valor ficava para trás. Personalizado preserva
-   *  o valor atual, porque ali quem manda é o negociado. */
+  /** Trocar de plano aplica a mensalidade de tabela e os módulos do pacote —
+   *  era exatamente isso que faltava: o nome mudava e o valor ficava para trás.
+   *  Personalizado preserva o valor atual, porque ali quem manda é o negociado.
+   *
+   *  A implantação fica de fora de propósito: desde 2026-09-11 ela não tem valor
+   *  de tabela e só existe quando alguém a define no campo próprio desta loja.
+   *  Mandar a de tabela aqui zeraria, sem aviso, uma implantação negociada. */
   function aplicarPlano(nome: string) {
     const plano = acharPlano(nome)
     if (!plano) { saveBilling({ planName: PLANO_PERSONALIZADO }); return }
@@ -206,7 +212,6 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     saveBilling({
       planName:       plano.nome,
       monthlyPrice:   plano.preco,
-      setupFee:       taxaImplantacao(plano),
       enabledModules: plano.modules,
     })
   }
@@ -236,23 +241,36 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     saveBilling({ setupFee: valor })
   }
 
+  /** Data a partir da qual a loja entra no gerador de mensalidades — e o dia do
+   *  mês desta data vira o vencimento de todas elas. Mensalidade já gerada não
+   *  muda: essa se corrige no Financeiro. Apagar o campo não limpa a data (a API
+   *  não aceita "sem data" por aqui), então o valor anterior volta. */
+  function salvarPrimeiraCobranca() {
+    const atual = tenant.billingStartsOn?.slice(0, 10) ?? ''
+    if (!primeiraCobranca) { setPrimeiraCobranca(atual); return }
+    if (primeiraCobranca === atual) return
+    saveBilling({ billingStartsOn: primeiraCobranca })
+  }
+
   useEffect(() => { setPlanName(tenant.planName) }, [tenant.planName])
   useEffect(() => { setMensalidade(String(tenant.monthlyPrice ?? 0)) }, [tenant.monthlyPrice])
   useEffect(() => { setImplantacao(String(tenant.setupFee ?? 0)) }, [tenant.setupFee])
+  useEffect(() => { setPrimeiraCobranca(tenant.billingStartsOn?.slice(0, 10) ?? '') }, [tenant.billingStartsOn])
 
   // Plano que não está na tabela (cortesia, piloto, legado como "Mar"/"Lagoa")
   // aparece como Personalizado em vez de sumir do select.
   const planoSelecionado = acharPlano(planName)?.nome ?? PLANO_PERSONALIZADO
 
-  async function saveBilling(next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]; monthlyPrice: number; setupFee: number }>) {
+  async function saveBilling(next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]; monthlyPrice: number; setupFee: number; billingStartsOn: string }>) {
     setSavingBilling(true)
     try {
       await platformApi.updateTenantBilling(tenant.id, {
-        planName:       next.planName       ?? planName,
-        paymentStatus:  next.paymentStatus  ?? tenant.paymentStatus,
-        enabledModules: next.enabledModules ?? tenant.enabledModules,
-        monthlyPrice:   next.monthlyPrice,
-        setupFee:       next.setupFee,
+        planName:        next.planName       ?? planName,
+        paymentStatus:   next.paymentStatus  ?? tenant.paymentStatus,
+        enabledModules:  next.enabledModules ?? tenant.enabledModules,
+        monthlyPrice:    next.monthlyPrice,
+        setupFee:        next.setupFee,
+        billingStartsOn: next.billingStartsOn,
       })
       toast.success('Billing atualizado.')
       onChanged()
@@ -397,9 +415,9 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       </div>
       {/* Editável, e não mais um rótulo: a implantação é moeda de troca no
           fechamento — precisa dar pra baixar, subir e zerar por loja. Zero é
-          um valor legítimo aqui: o backend só gera a cobrança de implantação
-          quando o valor é maior que zero (PlatformController, geração de
-          mensalidades), então zerar equivale a "sem taxa". */}
+          "sem taxa". Com valor, o gerador cobra de uma vez, com vencimento
+          padrão; parcelamento e data combinada ficam nas condições da loja
+          (aba Cobranças). */}
       <div className="flex items-center gap-1 mt-0.5">
         <span className="text-[10px] text-gray-500 shrink-0">implantação R$</span>
         <input
@@ -411,6 +429,19 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
           disabled={savingBilling || billingTravado}
           aria-label="Taxa de implantação desta loja"
           title={tituloBilling ?? 'Taxa de implantação — cobrada uma vez. Zero = sem cobrança.'}
+        />
+      </div>
+      <div className="flex items-center gap-1 mt-0.5">
+        <span className="text-[10px] text-gray-500 shrink-0">1ª cobrança</span>
+        <input
+          className={clsx('input text-xs py-0.5 tabular-nums', card ? 'w-full' : 'w-32')}
+          type="date"
+          value={primeiraCobranca}
+          onChange={e => setPrimeiraCobranca(e.target.value)}
+          onBlur={salvarPrimeiraCobranca}
+          disabled={savingBilling || billingTravado}
+          aria-label="Data da primeira mensalidade desta loja"
+          title={tituloBilling ?? 'Primeira mensalidade. O dia desta data vira o vencimento de todas; as já geradas não mudam.'}
         />
       </div>
     </>

@@ -72,6 +72,13 @@ public interface IPlatformPaymentGateway
     /// chame <see cref="GarantirClienteAsync"/> antes.</summary>
     Task<CobrancaGatewayResult> EmitirCobrancaAsync(TenantCharge charge, Tenant tenant, CancellationToken ct = default);
 
+    /// <summary>Cancela no gateway uma cobrança ainda não paga. Cobrança que já
+    /// não existe lá conta como cancelada — o objetivo foi atingido. Lança
+    /// quando o gateway recusa (a fatura já foi paga, por exemplo), e quem chama
+    /// não deve mexer na cobrança local nesse caso: a fatura continua viva na mão
+    /// do lojista.</summary>
+    Task CancelarCobrancaAsync(string externalChargeId, CancellationToken ct = default);
+
     /// <summary>Valida o segredo que o gateway manda no header. Endpoint de
     /// webhook é público por natureza — sem isso qualquer um na internet dá
     /// baixa nas nossas mensalidades mandando um POST.</summary>

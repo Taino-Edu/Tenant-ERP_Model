@@ -103,4 +103,44 @@ public class TabelaPrecosSincronizadaTests
                 $"o site anuncia a implantação de \"{plano}\" e o provisionamento é quem gera a cobrança");
         }
     }
+
+    /// <summary>A loja criada pelo site nasce com os módulos e o limite de usuários
+    /// do plano escolhido (TenantSignupService lê RecursosDosPlanos). Se o backend
+    /// divergir do catálogo, o lojista testa um produto por 15 dias e paga por
+    /// outro — descobre no dia em que o recurso some ou aparece.
+    ///
+    /// O Mar não declara os módulos como lista: usa TENANT_MODULES menos um item.
+    /// O parser reconhece esse formato e compara com KnownModules, que é a cópia
+    /// backend do mesmo catálogo.</summary>
+    [Fact]
+    public void CatalogoDoFrontend_DeveLiberarOsMesmosModulosEUsuariosQueOTesteGratis()
+    {
+        var conteudo = File.ReadAllText(Path.Combine(AcharRaizDoRepo(), "frontend", "lib", "planos.ts"));
+
+        var itens = Regex.Matches(
+            conteudo,
+            @"nome:\s*'(?<nome>[^']+)'[^}]*?maxUsers:\s*(?<max>null|\d+)[^}]*?modules:\s*(?<mods>\[[^\]]*\]|TENANT_MODULES\.filter\(m => m\.value !== '(?<fora>[a-z]+)'\)\.map\(m => m\.value\))",
+            RegexOptions.Singleline);
+
+        itens.Should().HaveCount(TenantProvisioningService.TabelaPrecos.Count,
+            "cada plano de tabela precisa declarar maxUsers e modules num formato que este teste entende");
+
+        // Nome qualificado porque o Moq, via GlobalUsings, também exporta um "Match".
+        foreach (var item in itens.Cast<System.Text.RegularExpressions.Match>())
+        {
+            var plano = item.Groups["nome"].Value;
+            var modulosDoSite = item.Groups["fora"].Success
+                ? TenantProvisioningService.KnownModules.Where(m => m != item.Groups["fora"].Value).ToArray()
+                : Regex.Matches(item.Groups["mods"].Value, @"'(?<m>[a-z]+)'").Select(m => m.Groups["m"].Value).ToArray();
+            int? maxDoSite = item.Groups["max"].Value == "null"
+                ? null
+                : int.Parse(item.Groups["max"].Value, CultureInfo.InvariantCulture);
+
+            var (modulos, maxUsuarios) = TenantProvisioningService.RecursosDosPlanos[plano];
+            modulos.Should().BeEquivalentTo(modulosDoSite,
+                $"o teste grátis de \"{plano}\" precisa liberar os módulos que o site promete");
+            maxUsuarios.Should().Be(maxDoSite,
+                $"o limite de usuários de \"{plano}\" precisa bater com o que o site anuncia");
+        }
+    }
 }

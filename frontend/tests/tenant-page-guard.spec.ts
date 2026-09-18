@@ -24,6 +24,25 @@ test('loja ativa passa; consulta interna não recebe cookies e não usa cache co
   })).toBe(200)
 })
 
+test('loja suspensa é distinguida da inexistente', async () => {
+  expect(await tenantPageStatus(shop, json({ errorCode: 'tenant_unavailable', suspended: true }, 404))).toBe('suspensa')
+})
+
+test('loja suspensa: /login continua abrindo para o dono pagar, vitrine não', async () => {
+  const fetchOriginal = globalThis.fetch
+  globalThis.fetch = (async () => new Response(JSON.stringify({ errorCode: 'tenant_unavailable', suspended: true }), { status: 404 })) as typeof fetch
+  try {
+    const login = await middleware(new NextRequest(`https://${shop}/login`, { headers: { host: shop } }))
+    expect(login.status).toBe(200)
+    expect(login.headers.get('x-middleware-next')).toBe('1')
+
+    const vitrine = await middleware(new NextRequest(`https://${shop}/`, { headers: { host: shop } }))
+    expect(vitrine.status).toBe(404)
+  } finally {
+    globalThis.fetch = fetchOriginal
+  }
+})
+
 test('somente 404 explícito de loja ausente/inativa vira página não encontrada', async () => {
   expect(await tenantPageStatus(shop, json({ errorCode: 'tenant_unavailable' }, 404))).toBe(404)
 })

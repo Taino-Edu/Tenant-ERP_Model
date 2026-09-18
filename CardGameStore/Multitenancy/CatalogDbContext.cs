@@ -22,6 +22,7 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
     public DbSet<LoginRedirectTicket> LoginRedirectTickets { get; set; }
+    public DbSet<TenantSignup> TenantSignups { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<CrmOpportunity> CrmOpportunities { get; set; }
     public DbSet<CrmActivity> CrmActivities { get; set; }
@@ -35,6 +36,8 @@ public class CatalogDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
+    public DbSet<TenantBillingDiscount> TenantBillingDiscounts { get; set; }
+    public DbSet<TenantBillingNotice> TenantBillingNotices { get; set; }
     public DbSet<ReferralPartner> ReferralPartners { get; set; }
     public DbSet<ReferralPartnerInvitation> ReferralPartnerInvitations { get; set; }
     public DbSet<TenantReferral> TenantReferrals { get; set; }
@@ -135,6 +138,21 @@ public class CatalogDbContext : DbContext
                   .HasDatabaseName("ix_login_redirect_tickets_ticket");
         });
 
+        modelBuilder.Entity<TenantSignup>(entity =>
+        {
+            entity.HasIndex(s => s.TokenHash)
+                  .IsUnique()
+                  .HasDatabaseName("ix_tenant_signups_token_hash");
+
+            // Disponibilidade de endereço e "o mesmo e-mail pediu de novo" são as
+            // duas consultas de todo pedido.
+            entity.HasIndex(s => s.Slug)
+                  .HasDatabaseName("ix_tenant_signups_slug");
+
+            entity.HasIndex(s => s.Email)
+                  .HasDatabaseName("ix_tenant_signups_email");
+        });
+
         modelBuilder.Entity<Lead>(entity =>
         {
             entity.Property(l => l.Status).HasConversion<string>().HasMaxLength(20);
@@ -189,6 +207,34 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(m => m.TicketId)
                   .HasDatabaseName("ix_support_ticket_messages_ticket_id");
+        });
+
+        modelBuilder.Entity<TenantBillingNotice>(entity =>
+        {
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(n => n.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // A trava do "avisa uma vez só" — ver TenantBillingNotice.
+            entity.HasIndex(n => new { n.TenantId, n.Kind, n.Reference })
+                  .IsUnique()
+                  .HasDatabaseName("ix_tenant_billing_notices_unique");
+        });
+
+        modelBuilder.Entity<TenantBillingDiscount>(entity =>
+        {
+            entity.Property(d => d.Kind).HasConversion<string>().HasMaxLength(20);
+
+            // Cascade pelo mesmo motivo de TenantCharge: desconto sem loja não
+            // tem o que descontar.
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(d => d.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(d => d.TenantId)
+                  .HasDatabaseName("ix_tenant_billing_discounts_tenant");
         });
 
         modelBuilder.Entity<TenantCharge>(entity =>

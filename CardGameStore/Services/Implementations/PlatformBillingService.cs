@@ -11,6 +11,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CardGameStore.Services.Implementations;
 
@@ -21,19 +22,25 @@ public class PlatformBillingService : IPlatformBillingService
     private readonly IReferralCommissionService? _referrals;
     private readonly IPlatformPaymentGateway? _gateway;
     private readonly IConfiguration? _config;
+    private readonly IPlatformBillingNotifier? _notifier;
+    private readonly IMemoryCache? _cache;
 
     public PlatformBillingService(
         CatalogDbContext catalog,
         ILogger<PlatformBillingService> logger,
         IReferralCommissionService? referrals = null,
         IPlatformPaymentGateway? gateway = null,
-        IConfiguration? config = null)
+        IConfiguration? config = null,
+        IPlatformBillingNotifier? notifier = null,
+        IMemoryCache? cache = null)
     {
         _catalog = catalog;
         _logger  = logger;
         _referrals = referrals;
         _gateway = gateway;
         _config  = config;
+        _notifier = notifier;
+        _cache    = cache;
     }
 
     /// <summary>Dias de tolerância depois do vencimento antes de suspender.
@@ -52,18 +59,6 @@ public class PlatformBillingService : IPlatformBillingService
     /// duplicada deixa de proteger.</summary>
     private static DateTime NormalizarCompetencia(DateTime data) =>
         new(data.Year, data.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-
-    /// <summary>Vencimento da competência, preservando o dia que o cliente já
-    /// conhece e sem estourar em mês curto: dia 31 vira 28 (ou 29) em fevereiro,
-    /// 30 em abril. Sem esse clamp, gerar a competência de fevereiro pra um
-    /// cliente que assinou dia 31 lançaria ArgumentOutOfRangeException e
-    /// derrubaria a geração do mês INTEIRO, não só a daquele cliente.</summary>
-    private static DateTime VencimentoNaCompetencia(DateTime competencia, int diaDesejado)
-    {
-        var ultimoDia = DateTime.DaysInMonth(competencia.Year, competencia.Month);
-        var dia = Math.Min(diaDesejado, ultimoDia);
-        return new DateTime(competencia.Year, competencia.Month, dia, 0, 0, 0, DateTimeKind.Utc);
-    }
 
     /// <summary>Reduz a data de baixa ao dia, 00:00 UTC.
     ///
@@ -91,48 +86,43 @@ public class PlatformBillingService : IPlatformBillingService
     public async Task<GerarMensalidadesResultDto> GerarMensalidadesAsync(DateTime competencia)
     {
         var comp = NormalizarCompetencia(competencia);
-        var fimDaCompetencia = comp.AddMonths(1);
+        var resultado = new GerarMensalidadesResultDto { Competencia = comp };
 
-        // Elegíveis: loja ativa, com mensalidade definida, e que já entrou em
-        // cobrança dentro (ou antes) desta competência. BillingStartsOn é o que
-        // implementa os 15 dias grátis. Dependendo do dia da assinatura, a
-        // primeira cobrança pode cair ainda nesta competência ou na seguinte.
-        var elegiveis = await _catalog.Tenants
+        var ativas = await _catalog.Tenants
             .AsNoTracking()
-            .Where(t => t.Status == TenantStatus.Active
-                     && t.MonthlyPrice > 0
-                     && t.BillingStartsOn != null
-                     && t.BillingStartsOn < fimDaCompetencia)
-            .Select(t => new { t.Id, t.MonthlyPrice, t.BillingStartsOn })
+            .Where(t => t.Status == TenantStatus.Active)
             .ToListAsync();
 
-        var ativasTotal = await _catalog.Tenants.CountAsync(t => t.Status == TenantStatus.Active);
+        var ids = ativas.Select(t => t.Id).ToList();
+
+        var descontos = (await _catalog.TenantBillingDiscounts
+                .AsNoTracking()
+                .Where(d => ids.Contains(d.TenantId))
+                .ToListAsync())
+            .ToLookup(d => d.TenantId);
 
         // Uma consulta só pra saber o que já existe, em vez de perguntar ao
-        // banco por tenant dentro do laço.
-        var jaCobrados = await _catalog.TenantCharges
-            .AsNoTracking()
-            .Where(c => c.Kind == TenantChargeKind.Mensalidade && c.ReferenceMonth == comp)
-            .Select(c => c.TenantId)
-            .ToListAsync();
-
-        var jaCobradosSet = jaCobrados.ToHashSet();
+        // banco por tenant dentro do laço. Implantação vem inteira (e não só a
+        // da competência) porque o saldo das parcelas depende das já pagas.
+        var existentes = (await _catalog.TenantCharges
+                .AsNoTracking()
+                .Where(c => ids.Contains(c.TenantId)
+                         && (c.ReferenceMonth == comp || c.Kind == TenantChargeKind.Implantacao))
+                .ToListAsync())
+            .ToLookup(c => c.TenantId);
 
         var novas = new List<TenantCharge>();
-        foreach (var t in elegiveis)
+        foreach (var tenant in ativas)
         {
-            if (jaCobradosSet.Contains(t.Id)) continue;
+            var faltantes = CobrancasQueFaltam(tenant, descontos[tenant.Id].ToList(), existentes[tenant.Id].ToList(), comp);
+            novas.AddRange(faltantes.Novas);
 
-            novas.Add(new TenantCharge
+            switch (faltantes.Mensalidade)
             {
-                TenantId       = t.Id,
-                Kind           = TenantChargeKind.Mensalidade,
-                // Cópia do preço vigente AGORA. Reajuste futuro não reescreve
-                // esta linha — ver comentário em TenantCharge.Amount.
-                Amount         = t.MonthlyPrice,
-                ReferenceMonth = comp,
-                DueDate        = VencimentoNaCompetencia(comp, t.BillingStartsOn!.Value.Day),
-            });
+                case SituacaoMensalidade.ForaDeCobranca:    resultado.ForaDeCobranca++;     break;
+                case SituacaoMensalidade.JaExistia:         resultado.JaExistiam++;         break;
+                case SituacaoMensalidade.ZeradaPorDesconto: resultado.ZeradasPorDesconto++; break;
+            }
         }
 
         if (novas.Count > 0)
@@ -141,20 +131,122 @@ public class PlatformBillingService : IPlatformBillingService
             await _catalog.SaveChangesAsync();
         }
 
-        var resultado = new GerarMensalidadesResultDto
-        {
-            Competencia    = comp,
-            Criadas        = novas.Count,
-            JaExistiam     = elegiveis.Count - novas.Count,
-            ForaDeCobranca = ativasTotal - elegiveis.Count,
-            TotalGerado    = novas.Sum(c => c.Amount),
-        };
+        resultado.Criadas               = novas.Count;
+        resultado.ParcelasDeImplantacao = novas.Count(c => c.Kind == TenantChargeKind.Implantacao);
+        resultado.TotalGerado           = novas.Sum(c => c.Amount);
 
         _logger.LogInformation(
-            "Mensalidades da competência {Competencia:yyyy-MM}: {Criadas} criadas, {JaExistiam} já existiam, {Fora} fora de cobrança (total R$ {Total}).",
-            comp, resultado.Criadas, resultado.JaExistiam, resultado.ForaDeCobranca, resultado.TotalGerado);
+            "Cobranças da competência {Competencia:yyyy-MM}: {Criadas} criadas ({Parcelas} parcelas de implantação), {JaExistiam} já existiam, {Fora} fora de cobrança (total R$ {Total}).",
+            comp, resultado.Criadas, resultado.ParcelasDeImplantacao, resultado.JaExistiam, resultado.ForaDeCobranca, resultado.TotalGerado);
 
         return resultado;
+    }
+
+    private enum SituacaoMensalidade { ForaDeCobranca, Criada, JaExistia, ZeradaPorDesconto }
+
+    private sealed record CobrancasFaltantes(List<TenantCharge> Novas, SituacaoMensalidade Mensalidade);
+
+    /// <summary>O que as condições da loja mandam cobrar na competência e ainda
+    /// não existe. Serve ao gerador do mês e ao recálculo depois de uma
+    /// renegociação — uma regra só pros dois.</summary>
+    private static CobrancasFaltantes CobrancasQueFaltam(
+        Tenant tenant,
+        IReadOnlyCollection<TenantBillingDiscount> descontos,
+        IReadOnlyCollection<TenantCharge> existentes,
+        DateTime comp)
+    {
+        var novas = new List<TenantCharge>();
+        var situacao = SituacaoMensalidade.ForaDeCobranca;
+
+        // BillingStartsOn é o que implementa os 15 dias grátis: antes da
+        // competência dele não há vencimento, e a loja fica fora.
+        var vencimento = CondicoesComerciais.VencimentoDaMensalidade(tenant, comp);
+        if (tenant.MonthlyPrice > 0 && vencimento is not null)
+        {
+            if (existentes.Any(c => c.Kind == TenantChargeKind.Mensalidade && c.ReferenceMonth == comp))
+            {
+                situacao = SituacaoMensalidade.JaExistia;
+            }
+            else
+            {
+                var calculo = CondicoesComerciais.CalcularMensalidade(tenant.MonthlyPrice, descontos, comp);
+
+                // Desconto integral não vira cobrança de R$ 0,00: o gateway não
+                // aceita, e a régua já ignora valor zero. A prévia das condições
+                // continua mostrando o mês como "sem cobrança".
+                if (calculo.Valor <= 0)
+                {
+                    situacao = SituacaoMensalidade.ZeradaPorDesconto;
+                }
+                else
+                {
+                    situacao = SituacaoMensalidade.Criada;
+                    novas.Add(new TenantCharge
+                    {
+                        TenantId        = tenant.Id,
+                        Kind            = TenantChargeKind.Mensalidade,
+                        // Cópia do valor vigente AGORA — ver TenantCharge.Amount.
+                        Amount          = calculo.Valor,
+                        GrossAmount     = calculo.Base,
+                        DiscountAmount  = calculo.Desconto,
+                        DiscountSummary = calculo.DescricaoDesconto,
+                        ReferenceMonth  = comp,
+                        DueDate         = vencimento.Value,
+                        AutoGenerated   = true,
+                    });
+                }
+            }
+        }
+
+        foreach (var parcela in ParcelasEsperadas(tenant, existentes))
+        {
+            // Parcela futura nasce no mês dela, não antes: o gateway emite tudo
+            // que está em aberto, e o lojista receberia a implantação inteira de
+            // uma vez.
+            if (parcela.Competencia > comp || parcela.Valor <= 0) continue;
+
+            // Uma implantação por competência (índice único). Parcela de outro
+            // número ocupando o mês é resto de renegociação que o recálculo
+            // resolve antes de chegar aqui.
+            if (existentes.Any(c => c.Kind == TenantChargeKind.Implantacao
+                                 && (c.InstallmentNumber == parcela.Numero || c.ReferenceMonth == parcela.Competencia)))
+                continue;
+
+            novas.Add(new TenantCharge
+            {
+                TenantId          = tenant.Id,
+                Kind              = TenantChargeKind.Implantacao,
+                Amount            = parcela.Valor,
+                ReferenceMonth    = parcela.Competencia,
+                DueDate           = parcela.Vencimento,
+                InstallmentNumber = parcela.Numero,
+                InstallmentCount  = parcela.Total,
+                AutoGenerated     = true,
+            });
+        }
+
+        return new CobrancasFaltantes(novas, situacao);
+    }
+
+    /// <summary>Parcelas que as condições mandam existir. Vazio quando a loja
+    /// tem implantação lançada à mão (ou anterior ao parcelamento): essa é a
+    /// palavra final, e gerar parcelas por cima cobraria a implantação duas vezes.
+    ///
+    /// Parcela paga ou editada à mão entra como valor fixo; o saldo se divide
+    /// entre as outras.</summary>
+    internal static IReadOnlyList<ParcelaImplantacao> ParcelasEsperadas(Tenant tenant, IEnumerable<TenantCharge> cobrancasDaLoja)
+    {
+        var implantacoes = cobrancasDaLoja.Where(c => c.Kind == TenantChargeKind.Implantacao).ToList();
+
+        if (implantacoes.Any(c => c.InstallmentNumber is null)) return [];
+
+        var fixas = implantacoes
+            .Where(c => c.PaidAt != null || !c.AutoGenerated)
+            .GroupBy(c => c.InstallmentNumber!.Value)
+            .ToDictionary(g => g.Key, g => g.Sum(c => c.Amount));
+
+        return CondicoesComerciais.ParcelasDaImplantacao(
+            tenant.SetupFee, tenant.SetupInstallments, tenant.SetupFirstDueDate, fixas);
     }
 
     public async Task<BillingResumoDto> ObterResumoAsync(DateTime competencia)
@@ -235,6 +327,10 @@ public class PlatformBillingService : IPlatformBillingService
             await _referrals.SynchronizeChargeAsync(cobranca, pagamentoAnterior);
         await _catalog.SaveChangesAsync();
 
+        // Baixa manual (pagamento por fora, Pix direto) reativa na hora do mesmo
+        // jeito que a do webhook.
+        await ReavaliarLojaAsync(cobranca.TenantId);
+
         var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == chargeId));
         return lista[0];
     }
@@ -262,6 +358,14 @@ public class PlatformBillingService : IPlatformBillingService
                       PagoEm      = c.PaidAt,
                       Observacao  = c.Notes,
                       Vencida     = c.PaidAt == null && c.DueDate < hoje,
+                      EmitidaNoGateway = c.ExternalChargeId != null,
+                      LinkPagamento    = c.PaymentUrl,
+                      Automatica        = c.AutoGenerated,
+                      ValorBruto        = c.GrossAmount,
+                      Desconto          = c.DiscountAmount,
+                      DescricaoDesconto = c.DiscountSummary,
+                      Parcela           = c.InstallmentNumber,
+                      TotalParcelas     = c.InstallmentCount,
                   })
             .ToListAsync();
     }
@@ -322,18 +426,45 @@ public class PlatformBillingService : IPlatformBillingService
 
     public async Task<TenantChargeDto> AtualizarCobrancaAsync(Guid chargeId, AtualizarCobrancaRequest request)
     {
-        var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
-            ?? throw new InvalidOperationException("Cobrança não encontrada.");
+        // Mesma trava da emissão: uma rodada em andamento pode estar emitindo
+        // exatamente esta cobrança com o valor antigo.
+        await _emissaoLock.WaitAsync();
+        try
+        {
+            var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
+                ?? throw new InvalidOperationException("Cobrança não encontrada.");
 
-        if (cobranca.PaidAt.HasValue)
-            throw new InvalidOperationException(
-                "Cobrança paga não pode ser alterada. Reabra a cobrança, altere e dê baixa de novo — assim a comissão do parceiro é refeita junto.");
+            if (cobranca.PaidAt.HasValue)
+                throw new InvalidOperationException(
+                    "Cobrança paga não pode ser alterada. Reabra a cobrança, altere e dê baixa de novo — assim a comissão do parceiro é refeita junto.");
 
-        cobranca.Amount  = request.Valor;
-        cobranca.DueDate = NormalizarData(request.Vencimento);
-        cobranca.Notes   = string.IsNullOrWhiteSpace(request.Observacao) ? null : request.Observacao.Trim();
+            var vencimento = NormalizarData(request.Vencimento);
+            var mudaFatura = cobranca.Amount != request.Valor || cobranca.DueDate != vencimento;
 
-        await _catalog.SaveChangesAsync();
+            if (mudaFatura)
+            {
+                // A fatura que o lojista tem na mão precisa sair junto. A
+                // cobrança volta a ficar sem id externo e é reemitida com o valor
+                // novo na próxima rodada.
+                var pendencias = new List<string>();
+                if (!await CancelarNoGatewayAsync(cobranca, await SlugDaLojaAsync(cobranca.TenantId), pendencias, CancellationToken.None))
+                    throw new InvalidOperationException(pendencias[0]);
+
+                // Ajuste à mão é decisão explícita: a próxima renegociação não
+                // passa por cima dele. Só observação não conta como ajuste.
+                cobranca.AutoGenerated = false;
+            }
+
+            cobranca.Amount  = request.Valor;
+            cobranca.DueDate = vencimento;
+            cobranca.Notes   = string.IsNullOrWhiteSpace(request.Observacao) ? null : request.Observacao.Trim();
+
+            await _catalog.SaveChangesAsync();
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
 
         var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == chargeId));
         return lista[0];
@@ -341,15 +472,218 @@ public class PlatformBillingService : IPlatformBillingService
 
     public async Task ExcluirCobrancaAsync(Guid chargeId)
     {
-        var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
-            ?? throw new InvalidOperationException("Cobrança não encontrada.");
+        await _emissaoLock.WaitAsync();
+        try
+        {
+            var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
+                ?? throw new InvalidOperationException("Cobrança não encontrada.");
 
-        if (cobranca.PaidAt.HasValue)
-            throw new InvalidOperationException(
-                "Cobrança paga não pode ser excluída. Reabra antes — e considere que reabrir também desfaz a comissão gerada por ela.");
+            if (cobranca.PaidAt.HasValue)
+                throw new InvalidOperationException(
+                    "Cobrança paga não pode ser excluída. Reabra antes — e considere que reabrir também desfaz a comissão gerada por ela.");
 
-        _catalog.TenantCharges.Remove(cobranca);
-        await _catalog.SaveChangesAsync();
+            // Cobrança que o gerador recriaria sozinho: excluir daria a impressão
+            // de perdão e ela voltaria na rodada seguinte, em até 12 horas. Vale
+            // também pra linha editada à mão — o que decide é se as condições da
+            // loja mandam cobrar aquele mês, não quem criou a linha. Mensalidade
+            // de competência passada pode sair: o gerador só cria a do mês corrente.
+            var tenant = await _catalog.Tenants.AsNoTracking().FirstAsync(t => t.Id == cobranca.TenantId);
+            var seriaRecriada = cobranca.Kind == TenantChargeKind.Implantacao
+                ? cobranca.InstallmentNumber is not null && tenant.SetupFee > 0
+                : cobranca.ReferenceMonth >= NormalizarCompetencia(DateTime.UtcNow)
+                  && tenant.MonthlyPrice > 0
+                  && CondicoesComerciais.VencimentoDaMensalidade(tenant, cobranca.ReferenceMonth) is not null;
+
+            if (seriaRecriada)
+                throw new InvalidOperationException(cobranca.Kind == TenantChargeKind.Implantacao
+                    ? "Esta parcela vem das condições comerciais da loja e seria gerada de novo. Mude o valor ou as parcelas da implantação nas condições da loja, ou edite a parcela para fixar outro valor."
+                    : "Esta mensalidade vem das condições comerciais da loja e seria gerada de novo. Para não cobrar este mês, edite a cobrança para R$ 0,00 ou cadastre um desconto de 100% nesta competência.");
+
+            var pendencias = new List<string>();
+            if (!await CancelarNoGatewayAsync(cobranca, await SlugDaLojaAsync(cobranca.TenantId), pendencias, CancellationToken.None))
+                throw new InvalidOperationException(pendencias[0]);
+
+            _catalog.TenantCharges.Remove(cobranca);
+            await _catalog.SaveChangesAsync();
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
+    }
+
+    private async Task<string> SlugDaLojaAsync(Guid tenantId) =>
+        await _catalog.Tenants.Where(t => t.Id == tenantId).Select(t => t.Slug).FirstOrDefaultAsync() ?? "loja";
+
+    /// <summary>Cancela no gateway a fatura de uma cobrança emitida, antes de a
+    /// cobrança local mudar ou sumir. Devolve false (com a razão em
+    /// <paramref name="pendencias"/>) quando não deu — e aí a cobrança local não
+    /// deve ser tocada: a fatura continua valendo na mão do lojista, e mudar só o
+    /// nosso lado criaria dois valores para a mesma dívida.</summary>
+    private async Task<bool> CancelarNoGatewayAsync(
+        TenantCharge cobranca, string slug, List<string> pendencias, CancellationToken ct)
+    {
+        if (cobranca.ExternalChargeId is null) return true;
+
+        if (_gateway is null || !_gateway.IsConfigured
+            || !string.Equals(cobranca.Gateway, _gateway.Name, StringComparison.Ordinal))
+        {
+            pendencias.Add($"{slug}: a fatura da {Rotulo(cobranca)} já foi emitida em {cobranca.Gateway ?? "outro gateway"}, que não está configurado para cancelá-la. Nada foi alterado nela.");
+            return false;
+        }
+
+        try
+        {
+            await _gateway.CancelarCobrancaAsync(cobranca.ExternalChargeId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Falha ao cancelar no gateway a cobrança {ChargeId} do tenant {Slug}", cobranca.Id, slug);
+            pendencias.Add($"{slug}: não foi possível cancelar a fatura da {Rotulo(cobranca)} no gateway ({ex.Message}). Nada foi alterado nela.");
+            return false;
+        }
+
+        // Gravado na hora, pelo mesmo motivo do SaveChanges por cobrança na
+        // emissão: a fatura já não existe lá, e perder isto deixaria a linha
+        // apontando pra uma cobrança apagada que nunca seria reemitida.
+        cobranca.Gateway          = null;
+        cobranca.ExternalChargeId = null;
+        cobranca.PaymentUrl       = null;
+        await _catalog.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private static string Rotulo(TenantCharge cobranca) => cobranca.Kind == TenantChargeKind.Implantacao
+        ? cobranca.InstallmentNumber is { } numero ? $"implantação {numero}/{cobranca.InstallmentCount}" : "implantação"
+        : $"mensalidade {cobranca.ReferenceMonth:MM/yyyy}";
+
+    // =========================================================================
+    // RENEGOCIAÇÃO
+    // =========================================================================
+
+    public async Task<SincronizacaoCobrancasResultDto> SincronizarCobrancasDaLojaAsync(
+        Guid tenantId, CancellationToken ct = default)
+    {
+        await _emissaoLock.WaitAsync(ct);
+        try
+        {
+            return await SincronizarComTravaAsync(tenantId, ct);
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
+    }
+
+    /// <summary>Cobrança do jeito que as condições atuais mandam que ela seja.</summary>
+    private sealed record CobrancaEsperada(
+        decimal Valor, decimal? Bruto, decimal Desconto, string? Resumo,
+        DateTime Vencimento, int? TotalParcelas);
+
+    private async Task<SincronizacaoCobrancasResultDto> SincronizarComTravaAsync(Guid tenantId, CancellationToken ct)
+    {
+        var resultado = new SincronizacaoCobrancasResultDto();
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId, ct)
+            ?? throw new InvalidOperationException("Loja não encontrada.");
+
+        var descontos = await _catalog.TenantBillingDiscounts.AsNoTracking()
+            .Where(d => d.TenantId == tenantId)
+            .ToListAsync(ct);
+
+        var cobrancas = await _catalog.TenantCharges
+            .Where(c => c.TenantId == tenantId)
+            .ToListAsync(ct);
+
+        var competenciaAtual  = NormalizarCompetencia(DateTime.UtcNow);
+        var parcelas          = ParcelasEsperadas(tenant, cobrancas);
+        var implantacaoManual = cobrancas.Any(c => c.Kind == TenantChargeKind.Implantacao && c.InstallmentNumber is null);
+        var removidas         = new HashSet<Guid>();
+
+        // Só o que está em aberto e nasceu das condições. Paga é fato consumado;
+        // manual é decisão de alguém que o recálculo não conhece.
+        foreach (var cobranca in cobrancas.Where(c => c.AutoGenerated && c.PaidAt == null))
+        {
+            CobrancaEsperada? esperada;
+
+            if (cobranca.Kind == TenantChargeKind.Mensalidade)
+            {
+                // Dívida de competência passada não se renegocia sozinha: baixar
+                // o preço hoje não pode perdoar o que vencia em agosto.
+                if (cobranca.ReferenceMonth < competenciaAtual) continue;
+
+                var vencimento = CondicoesComerciais.VencimentoDaMensalidade(tenant, cobranca.ReferenceMonth);
+                var calculo = CondicoesComerciais.CalcularMensalidade(tenant.MonthlyPrice, descontos, cobranca.ReferenceMonth);
+
+                esperada = tenant.MonthlyPrice > 0 && vencimento is not null && calculo.Valor > 0
+                    ? new CobrancaEsperada(calculo.Valor, calculo.Base, calculo.Desconto, calculo.DescricaoDesconto, vencimento.Value, null)
+                    : null;
+            }
+            else
+            {
+                if (implantacaoManual) continue;
+
+                // Parcela que mudou de mês é refeita, não movida: trocar a
+                // competência de uma linha pode colidir no índice único com outra
+                // parcela que ainda não saiu do lugar.
+                var parcela = parcelas.FirstOrDefault(p => p.Numero == cobranca.InstallmentNumber);
+                esperada = parcela is not null && parcela.Valor > 0 && parcela.Competencia == cobranca.ReferenceMonth
+                    ? new CobrancaEsperada(parcela.Valor, null, 0m, null, parcela.Vencimento, parcela.Total)
+                    : null;
+            }
+
+            if (esperada is null)
+            {
+                if (!await CancelarNoGatewayAsync(cobranca, tenant.Slug, resultado.Pendencias, ct)) continue;
+
+                _catalog.TenantCharges.Remove(cobranca);
+                removidas.Add(cobranca.Id);
+                resultado.Removidas++;
+                continue;
+            }
+
+            var mudaFatura  = cobranca.Amount != esperada.Valor || cobranca.DueDate != esperada.Vencimento;
+            var mudaDetalhe = cobranca.GrossAmount != esperada.Bruto
+                           || cobranca.DiscountAmount != esperada.Desconto
+                           || cobranca.DiscountSummary != esperada.Resumo
+                           || cobranca.InstallmentCount != esperada.TotalParcelas;
+
+            if (!mudaFatura && !mudaDetalhe) continue;
+            if (mudaFatura && !await CancelarNoGatewayAsync(cobranca, tenant.Slug, resultado.Pendencias, ct)) continue;
+
+            cobranca.Amount           = esperada.Valor;
+            cobranca.DueDate          = esperada.Vencimento;
+            cobranca.GrossAmount      = esperada.Bruto;
+            cobranca.DiscountAmount   = esperada.Desconto;
+            cobranca.DiscountSummary  = esperada.Resumo;
+            cobranca.InstallmentCount = esperada.TotalParcelas;
+            resultado.Atualizadas++;
+        }
+
+        // Remoções antes das criações: uma parcela que mudou de mês libera a
+        // competência que a nova pode ocupar.
+        await _catalog.SaveChangesAsync(ct);
+
+        // Loja suspensa não ganha cobrança nova — mesma regra do gerador mensal.
+        if (tenant.Status == TenantStatus.Active)
+        {
+            var restantes = cobrancas.Where(c => !removidas.Contains(c.Id)).ToList();
+            var novas = CobrancasQueFaltam(tenant, descontos, restantes, competenciaAtual).Novas;
+
+            if (novas.Count > 0)
+            {
+                _catalog.TenantCharges.AddRange(novas);
+                await _catalog.SaveChangesAsync(ct);
+                resultado.Criadas = novas.Count;
+            }
+        }
+
+        if (resultado.Criadas + resultado.Atualizadas + resultado.Removidas > 0 || resultado.Pendencias.Count > 0)
+            _logger.LogInformation(
+                "Condições do tenant {Slug} aplicadas: {Criadas} criadas, {Atualizadas} atualizadas, {Removidas} removidas, {Pendencias} pendências",
+                tenant.Slug, resultado.Criadas, resultado.Atualizadas, resultado.Removidas, resultado.Pendencias.Count);
+
+        return resultado;
     }
 
     private Task<bool> ExisteAsync(Guid tenantId, TenantChargeKind tipo, DateTime competencia) =>
@@ -369,7 +703,43 @@ public class PlatformBillingService : IPlatformBillingService
     // AUTOMAÇÃO DA COBRANÇA (RB-01)
     // =========================================================================
 
+    // Uma emissão por vez neste processo. Enquanto só existia o job de 12 em 12
+    // horas, a rodada era idempotente por construção (só pega cobrança sem id
+    // externo). Com o botão "Emitir no Asaas agora" passaram a existir dois
+    // chamadores, e duas rodadas simultâneas leriam as MESMAS pendentes antes de
+    // qualquer uma gravar o id externo: cada cobrança sairia duas vezes no
+    // gateway — boleto/Pix real em dobro na mão do lojista. Em fila, a segunda
+    // rodada já encontra os ids gravados e não emite nada. Semáforo em memória
+    // basta pelo mesmo motivo do provisionamento: a API roda em instância única.
+    private static readonly SemaphoreSlim _emissaoLock = new(1, 1);
+
     public async Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesAsync(CancellationToken ct = default)
+    {
+        await _emissaoLock.WaitAsync(ct);
+        try
+        {
+            return await EmitirPendentesComTravaAsync(null, ct);
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
+    }
+
+    public async Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesDaLojaAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        await _emissaoLock.WaitAsync(ct);
+        try
+        {
+            return await EmitirPendentesComTravaAsync(tenantId, ct);
+        }
+        finally
+        {
+            _emissaoLock.Release();
+        }
+    }
+
+    private async Task<EmissaoGatewayResultDto> EmitirPendentesComTravaAsync(Guid? tenantId, CancellationToken ct)
     {
         var resultado = new EmissaoGatewayResultDto();
 
@@ -383,10 +753,19 @@ public class PlatformBillingService : IPlatformBillingService
         // gateway só produziria fatura confusa pro lojista.
         var pendentes = await _catalog.TenantCharges
             .Where(c => c.PaidAt == null && c.ExternalChargeId == null && c.Amount > 0)
+            .Where(c => tenantId == null || c.TenantId == tenantId)
             .OrderBy(c => c.DueDate)
             .ToListAsync(ct);
 
-        if (pendentes.Count == 0) return resultado;
+        if (pendentes.Count == 0)
+        {
+            // Sem este número a resposta de uma rodada vazia era "0 já emitidas"
+            // mesmo com tudo no gateway — e o botão do Financeiro não tinha como
+            // dizer por que não mandou nada.
+            resultado.JaEmitidas = await _catalog.TenantCharges
+                .CountAsync(c => c.PaidAt == null && c.ExternalChargeId != null, ct);
+            return resultado;
+        }
 
         var tenantIds = pendentes.Select(c => c.TenantId).Distinct().ToList();
         var tenants = await _catalog.Tenants
@@ -482,6 +861,8 @@ public class PlatformBillingService : IPlatformBillingService
             "Cobrança {ChargeId} {Acao} por webhook do {Gateway}",
             cobranca.Id, paga ? "baixada" : "reaberta", gateway);
 
+        await ReavaliarLojaAsync(cobranca.TenantId);
+
         return true;
     }
 
@@ -503,34 +884,14 @@ public class PlatformBillingService : IPlatformBillingService
             .ToListAsync(ct);
 
         var vencidos = inadimplentes.ToHashSet();
+        var mudancas = new List<(Tenant Tenant, MudancaDaRegua Mudanca)>();
 
         foreach (var tenant in tenants)
         {
-            var deve = vencidos.Contains(tenant.Id);
-
-            if (deve && tenant.Status == TenantStatus.Active)
-            {
-                tenant.Status = TenantStatus.Suspended;
-                tenant.PaymentStatus = TenantPaymentStatus.Atrasado;
-                resultado.Suspensos.Add(tenant.Slug);
-            }
-            else if (!deve && tenant.Status == TenantStatus.Suspended
-                           && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
-            {
-                // A dupla condição é o que impede a régua de reabrir uma loja que
-                // o dono da plataforma suspendeu à mão por outro motivo (fim de
-                // contrato, abuso). Só volta quem a própria régua derrubou, e a
-                // marca disso é o PaymentStatus.Atrasado que ela mesma gravou.
-                tenant.Status = TenantStatus.Active;
-                tenant.PaymentStatus = TenantPaymentStatus.Pago;
-                resultado.Reativados.Add(tenant.Slug);
-            }
-            else if (!deve && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
-            {
-                // Quitou antes de a carência estourar: nunca chegou a ser
-                // suspenso, mas o status precisa voltar pra Pago.
-                tenant.PaymentStatus = TenantPaymentStatus.Pago;
-            }
+            var mudanca = DecidirRegua(tenant, deve: vencidos.Contains(tenant.Id));
+            if (mudanca == MudancaDaRegua.Suspensa)  resultado.Suspensos.Add(tenant.Slug);
+            if (mudanca == MudancaDaRegua.Reativada) resultado.Reativados.Add(tenant.Slug);
+            if (mudanca != MudancaDaRegua.Nenhuma)   mudancas.Add((tenant, mudanca));
         }
 
         if (resultado.Suspensos.Count > 0 || resultado.Reativados.Count > 0)
@@ -538,6 +899,85 @@ public class PlatformBillingService : IPlatformBillingService
                 resultado.Suspensos.Count, resultado.Reativados.Count);
 
         await _catalog.SaveChangesAsync(ct);
+
+        foreach (var (tenant, mudanca) in mudancas)
+            DepoisDaMudanca(tenant, mudanca);
+
         return resultado;
+    }
+
+    private enum MudancaDaRegua { Nenhuma, Suspensa, Reativada }
+
+    /// <summary>A regra da régua para uma loja, aplicada no objeto. Uma só, pro
+    /// job e pra reavaliação imediata depois de um pagamento.</summary>
+    private static MudancaDaRegua DecidirRegua(Tenant tenant, bool deve)
+    {
+        if (tenant.PaymentStatus == TenantPaymentStatus.Isento) return MudancaDaRegua.Nenhuma;
+
+        if (deve && tenant.Status == TenantStatus.Active)
+        {
+            tenant.Status = TenantStatus.Suspended;
+            tenant.PaymentStatus = TenantPaymentStatus.Atrasado;
+            return MudancaDaRegua.Suspensa;
+        }
+
+        if (!deve && tenant.Status == TenantStatus.Suspended
+                  && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
+        {
+            // A dupla condição é o que impede a régua de reabrir uma loja que
+            // o dono da plataforma suspendeu à mão por outro motivo (fim de
+            // contrato, abuso). Só volta quem a própria régua derrubou, e a
+            // marca disso é o PaymentStatus.Atrasado que ela mesma gravou.
+            tenant.Status = TenantStatus.Active;
+            tenant.PaymentStatus = TenantPaymentStatus.Pago;
+            return MudancaDaRegua.Reativada;
+        }
+
+        if (!deve && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
+        {
+            // Quitou antes de a carência estourar: nunca chegou a ser
+            // suspenso, mas o status precisa voltar pra Pago.
+            tenant.PaymentStatus = TenantPaymentStatus.Pago;
+        }
+
+        return MudancaDaRegua.Nenhuma;
+    }
+
+    /// <summary>Reaplica a régua a uma loja logo depois de um pagamento (ou de um
+    /// estorno), sem esperar a rodada de 12 horas. Antes disto o webhook dava
+    /// baixa e a loja paga continuava fora do ar até o job passar — o lojista
+    /// pagava e via "loja suspensa" por horas.</summary>
+    private async Task ReavaliarLojaAsync(Guid tenantId)
+    {
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId);
+        if (tenant is null) return;
+
+        var limite = DateTime.UtcNow.Date.AddDays(-DiasDeCarencia);
+        var deve = await _catalog.TenantCharges.AnyAsync(c =>
+            c.TenantId == tenantId && c.PaidAt == null && c.Amount > 0 && c.DueDate < limite);
+
+        var mudanca = DecidirRegua(tenant, deve);
+        await _catalog.SaveChangesAsync();
+
+        if (mudanca != MudancaDaRegua.Nenhuma)
+        {
+            _logger.LogInformation("Loja {Slug} {Mudanca} pela régua logo após pagamento/estorno",
+                tenant.Slug, mudanca == MudancaDaRegua.Reativada ? "reativada" : "suspensa");
+            DepoisDaMudanca(tenant, mudanca);
+        }
+    }
+
+    private void DepoisDaMudanca(Tenant tenant, MudancaDaRegua mudanca)
+    {
+        // O TenantResolutionMiddleware guarda o status da loja por 30 segundos.
+        // Sem limpar, a loja recém-reativada ainda responderia "suspensa" pra
+        // quem acabou de pagar e voltou pro painel.
+        _cache?.Remove($"tenant-slug:{tenant.Slug}");
+        if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
+            _cache?.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
+
+        if (_notifier is null) return;
+        if (mudanca == MudancaDaRegua.Suspensa)  _notifier.NotificarLojaSuspensa(tenant.Id);
+        if (mudanca == MudancaDaRegua.Reativada) _notifier.NotificarLojaReativada(tenant.Id);
     }
 }

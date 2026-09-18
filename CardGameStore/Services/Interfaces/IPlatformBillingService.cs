@@ -8,10 +8,18 @@ namespace CardGameStore.Services.Interfaces;
 /// "public") e só o dono da plataforma alcança.</summary>
 public interface IPlatformBillingService
 {
-    /// <summary>Gera as mensalidades de um mês de competência para todas as
-    /// lojas ativas que já entraram em cobrança. Idempotente: rodar de novo no
-    /// mesmo mês não duplica nada.</summary>
+    /// <summary>Gera as cobranças de um mês de competência para todas as lojas
+    /// ativas, a partir das condições negociadas de cada uma: mensalidade com os
+    /// descontos vigentes e a parcela de implantação do mês. Idempotente: rodar
+    /// de novo no mesmo mês não duplica nada.</summary>
     Task<GerarMensalidadesResultDto> GerarMensalidadesAsync(DateTime competencia);
+
+    /// <summary>Aplica as condições comerciais atuais de uma loja às cobranças
+    /// dela: ajusta as automáticas em aberto (cancelando no gateway a fatura que
+    /// mudou), remove as que deixaram de ser devidas e cria o que passou a ser
+    /// devido no mês corrente. Mensalidade de competência passada, cobrança paga
+    /// e cobrança manual não são tocadas.</summary>
+    Task<SincronizacaoCobrancasResultDto> SincronizarCobrancasDaLojaAsync(Guid tenantId, CancellationToken ct = default);
 
     /// <summary>Painel do mês: MRR contratado, faturado, recebido, em aberto e a
     /// inadimplência acumulada.</summary>
@@ -47,6 +55,10 @@ public interface IPlatformBillingService
     /// externo. Idempotente: rodar duas vezes não emite a mesma cobrança de
     /// novo.</summary>
     Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesAsync(CancellationToken ct = default);
+
+    /// <summary>O mesmo, só para uma loja — usado quando ela acaba de informar o
+    /// documento de cobrança e não deve esperar a rodada de 12 horas pela fatura.</summary>
+    Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesDaLojaAsync(Guid tenantId, CancellationToken ct = default);
 
     /// <summary>Aplica o pagamento (ou o estorno) que veio do gateway. Devolve
     /// false quando o id externo não bate com cobrança nenhuma — o que é

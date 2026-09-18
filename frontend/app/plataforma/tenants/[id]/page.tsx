@@ -3,18 +3,21 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  platformApi, TenantSummary, TenantStaffDto, TenantCustomerDto, AuditLogDto,
-  SupportTicketDto, PagedResult, TenantUsageDto, getErrorMessage,
+  platformApi, platformBillingApi, TenantSummary, TenantStaffDto, TenantCustomerDto, AuditLogDto,
+  SupportTicketDto, PagedResult, TenantUsageDto, TenantChargeDto, getErrorMessage,
   IntegrationClientDto, IntegrationClientCreatedDto,
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X, KeyRound, Copy, RotateCw, Trash2, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X, KeyRound, Copy, RotateCw, Trash2, ShieldCheck, Wallet, Plus } from 'lucide-react'
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
 import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
+import CobrancaFormModal from '@/components/plataforma/CobrancaFormModal'
+import CobrancasTabela, { brl } from '@/components/plataforma/CobrancasTabela'
+import CondicoesComerciaisPainel from '@/components/plataforma/CondicoesComerciaisPainel'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import { ROOT_DOMAIN } from '@/lib/seo'
 
@@ -23,7 +26,7 @@ function fmtDateTime(iso: string | null) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-type Tab = 'staff' | 'clientes' | 'logs' | 'suporte' | 'uso'
+type Tab = 'staff' | 'clientes' | 'cobrancas' | 'logs' | 'suporte' | 'uso'
 
 // Cada aba carrega de um endpoint diferente, com permissão própria: logs e
 // suporte não vêm junto com `tenants.read`. Sem esse recorte, um perfil
@@ -31,6 +34,7 @@ type Tab = 'staff' | 'clientes' | 'logs' | 'suporte' | 'uso'
 const TABS: { key: Tab; label: string; icon: typeof Users; permission: string }[] = [
   { key: 'staff',    label: 'Funcionários & Admins', icon: UserCog,   permission: 'platform.tenants.read' },
   { key: 'clientes', label: 'Clientes',               icon: Users,     permission: 'platform.tenants.read' },
+  { key: 'cobrancas', label: 'Cobranças',             icon: Wallet,    permission: 'platform.finance.read' },
   { key: 'logs',     label: 'Logs',                   icon: History,   permission: 'platform.logs' },
   { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy,  permission: 'platform.support.read' },
   { key: 'uso',      label: 'Uso',                     icon: BarChart2, permission: 'platform.tenants.read' },
@@ -233,6 +237,88 @@ function LogsTab({ tenantId }: { tenantId: string }) {
         <AuditLogDetailModal log={viewingLog} onClose={() => setViewingLog(null)} />
       )}
     </>
+  )
+}
+
+/** Histórico de cobranças da loja, todos os meses. A lista e as ações são as
+ *  mesmas do Financeiro (CobrancasTabela); o que muda é o recorte — lá é uma
+ *  competência com todas as lojas, aqui é uma loja com todas as competências. */
+function CobrancasTab({ tenant, onTenantAlterado }: { tenant: TenantSummary; onTenantAlterado: () => void }) {
+  const [cobrancas, setCobrancas] = useState<TenantChargeDto[] | null>(null)
+  const [lancando, setLancando] = useState(false)
+  const [versaoCobrancas, setVersaoCobrancas] = useState(0)
+  const podeLancar = usePlatformPermissions()('platform.finance.manage')
+
+  const carregar = useCallback(async () => {
+    try {
+      const { data } = await platformBillingApi.porTenant(tenant.id)
+      setCobrancas(data)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar cobranças'))
+      setCobrancas([])
+    }
+  }, [tenant.id])
+
+  // Mexer numa cobrança pela lista também muda a prévia das condições.
+  const cobrancaAlterada = useCallback(async () => {
+    await carregar()
+    setVersaoCobrancas(v => v + 1)
+  }, [carregar])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  if (cobrancas === null) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+
+  const emAberto = cobrancas.filter(c => !c.pagoEm).reduce((soma, c) => soma + c.valor, 0)
+  const naoEmitidas = cobrancas.filter(c => !c.pagoEm && !c.emitidaNoGateway && c.valor > 0).length
+  // Mês local, e não toISOString(): perto da virada do mês o UTC já está no
+  // seguinte e a cobrança nasceria na competência errada.
+  const hoje = new Date()
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+
+  return (
+    <div className="space-y-4">
+      {/* O combinado com a loja vem antes da lista: é o que se confere (e se
+          renegocia) antes de mexer numa cobrança avulsa. */}
+      <CondicoesComerciaisPainel
+        tenantId={tenant.id}
+        podeEditar={podeLancar}
+        onCobrancasAlteradas={async () => { onTenantAlterado(); await carregar() }}
+        versaoCobrancas={versaoCobrancas}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-600 pt-4">
+        <p className="text-sm text-gray-400">
+          Histórico de cobranças
+          {' · '}em aberto <strong className={emAberto > 0 ? 'text-amber-300' : 'text-white'}>{brl(emAberto)}</strong>
+        </p>
+        {podeLancar && (
+          <button type="button" onClick={() => setLancando(true)} className="btn-secondary text-sm">
+            <Plus className="w-4 h-4" /> Nova cobrança
+          </button>
+        )}
+      </div>
+
+      {naoEmitidas > 0 && (
+        <p className="text-xs text-amber-300">
+          {naoEmitidas} cobrança(s) em aberto ainda não foram ao Asaas. Saem na rodada automática ou pelo botão “Emitir no Asaas” do Financeiro.
+        </p>
+      )}
+
+      {cobrancas.length === 0
+        ? <p className="text-gray-400 text-center py-10">Nenhuma cobrança desta loja ainda.</p>
+        : <CobrancasTabela cobrancas={cobrancas} podeLancar={podeLancar} mostrarLoja={false} onAlterado={cobrancaAlterada} />}
+
+      {lancando && (
+        <CobrancaFormModal
+          cobranca={null}
+          tenantFixo={{ id: tenant.id, slug: tenant.slug }}
+          competencia={mesAtual}
+          onClose={() => setLancando(false)}
+          onSalvo={cobrancaAlterada}
+        />
+      )}
+    </div>
   )
 }
 
@@ -621,6 +707,7 @@ export default function TenantDetailPage() {
             perfil talvez nem possa fazer. */}
         {abaAtiva === 'staff'    && <StaffTab tenantId={tenantId} podeRedefinirSenha={podeGerenciar} />}
         {abaAtiva === 'clientes' && <ClientesTab tenantId={tenantId} />}
+        {abaAtiva === 'cobrancas' && <CobrancasTab tenant={tenant} onTenantAlterado={fetchTenant} />}
         {abaAtiva === 'logs'     && <LogsTab tenantId={tenantId} />}
         {abaAtiva === 'suporte'  && <SuporteTab tenantId={tenantId} />}
         {abaAtiva === 'uso'      && <UsoTab tenantId={tenantId} />}

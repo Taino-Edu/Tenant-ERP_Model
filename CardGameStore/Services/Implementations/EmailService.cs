@@ -128,6 +128,119 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Convite para a equipe Octus", body);
     }
 
+    public async Task SendTenantSignupConfirmationAsync(
+        string toEmail, string toName, string storeName, string storeAddress, string confirmUrl,
+        DateTime expiresAt, bool requireDelivery)
+    {
+        // Sai do domínio raiz, antes de a loja existir: não há SiteConfig de loja
+        // para dar nome ao e-mail, então a marca é a da plataforma. Tudo que veio
+        // do formulário é codificado — nome de loja é texto livre de desconhecido.
+        var safeName    = WebUtility.HtmlEncode(toName);
+        var safeStore   = WebUtility.HtmlEncode(storeName);
+        var safeAddress = WebUtility.HtmlEncode(storeAddress);
+        var safeUrl     = WebUtility.HtmlEncode(confirmUrl);
+        var horas       = Math.Max(1, (int)Math.Round((expiresAt - DateTime.UtcNow).TotalHours));
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>Falta um clique para a <strong>{safeStore}</strong> ficar pronta em <strong>{safeAddress}</strong>.</p>
+            <p><a href="{safeUrl}" style="background:#0e7490;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Criar minha senha e abrir a loja</a></p>
+            <p>São 15 dias grátis, sem cartão. No link você cria a senha de acesso e entra direto no painel.</p>
+            <p style="color:#888;font-size:12px;">Este link vale por {horas} horas e só funciona uma vez. Se você não pediu uma loja no Octus, ignore este e-mail: nada será criado.</p>
+            """;
+
+        await SendAsync(toEmail, toName, $"Confirme a criação da {storeName}", body, requireDelivery);
+    }
+
+    // ── Cobrança da plataforma ───────────────────────────────────────────────
+    // Tudo aqui é codificado antes de entrar no HTML: nome de loja e de
+    // responsável são texto livre digitado no cadastro pelo site.
+
+    private static string BotaoCobranca(string url, string texto) =>
+        $"""<p><a href="{WebUtility.HtmlEncode(url)}" style="background:#0e7490;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">{texto}</a></p>""";
+
+    private static string Dia(DateTime data) =>
+        data.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Reais(decimal valor) =>
+        "R$ " + valor.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo("pt-BR"));
+
+    public async Task SendCobrancaDadosFaltandoAsync(
+        string toEmail, string toName, string storeName, DateTime primeiraCobranca, string assinaturaUrl)
+    {
+        var safeName  = WebUtility.HtmlEncode(toName);
+        var safeStore = WebUtility.HtmlEncode(storeName);
+        var jaComecou = primeiraCobranca.Date <= DateTime.UtcNow.Date;
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>{(jaComecou
+                ? $"A mensalidade da <strong>{safeStore}</strong> começou em {Dia(primeiraCobranca)}, mas ainda não temos o CPF ou CNPJ para emitir a fatura."
+                : $"O teste grátis da <strong>{safeStore}</strong> termina e a primeira mensalidade vence em <strong>{Dia(primeiraCobranca)}</strong>. Para emitirmos a fatura, falta o CPF ou CNPJ de quem paga.")}</p>
+            <p>Leva um minuto: informe o documento na tela de Assinatura do painel e a fatura sai na hora, com Pix e boleto.</p>
+            {BotaoCobranca(assinaturaUrl, "Informar dados de cobrança")}
+            <p style="color:#888;font-size:12px;">Sem os dados, a fatura não é emitida e a loja é suspensa quando a mensalidade passar do prazo.</p>
+            """;
+
+        await SendAsync(toEmail, toName, $"Falta o CPF/CNPJ para a fatura da {storeName}", body);
+    }
+
+    public async Task SendCobrancaAvisoSuspensaoAsync(
+        string toEmail, string toName, string storeName, decimal valor, DateTime vencimento,
+        DateTime suspensaoEm, string? linkPagamento, string assinaturaUrl)
+    {
+        var safeName  = WebUtility.HtmlEncode(toName);
+        var safeStore = WebUtility.HtmlEncode(storeName);
+
+        // Sem link de pagamento a fatura nunca foi emitida — quase sempre porque
+        // falta o documento. Aí o caminho é a tela de Assinatura, não o Asaas.
+        var acao = linkPagamento is not null
+            ? BotaoCobranca(linkPagamento, "Pagar a fatura")
+            : $"""
+               <p>A fatura ainda não pôde ser emitida porque faltam os dados de cobrança. Informe o CPF ou CNPJ e ela sai na hora.</p>
+               {BotaoCobranca(assinaturaUrl, "Informar dados e pagar")}
+               """;
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>A mensalidade de <strong>{Reais(valor)}</strong> da <strong>{safeStore}</strong> venceu em {Dia(vencimento)} e ainda está em aberto.</p>
+            <p>Sem o pagamento, a loja é suspensa em <strong>{Dia(suspensaoEm)}</strong>: o painel e a vitrine ficam fora do ar até a quitação. Nenhum dado é apagado.</p>
+            {acao}
+            <p style="color:#888;font-size:12px;">Já pagou? Pode ignorar este e-mail — a confirmação chega sozinha em alguns minutos.</p>
+            """;
+
+        await SendAsync(toEmail, toName, $"A {storeName} será suspensa em {Dia(suspensaoEm)}", body);
+    }
+
+    public async Task SendLojaSuspensaAsync(string toEmail, string toName, string storeName, string assinaturaUrl)
+    {
+        var safeName  = WebUtility.HtmlEncode(toName);
+        var safeStore = WebUtility.HtmlEncode(storeName);
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>A <strong>{safeStore}</strong> foi suspensa por mensalidade em atraso. A vitrine e o painel estão fora do ar, mas nenhum dado foi apagado.</p>
+            <p>Você continua conseguindo entrar como administrador para ver a fatura e pagar. A loja volta sozinha assim que o pagamento é confirmado — no Pix, em minutos.</p>
+            {BotaoCobranca(assinaturaUrl, "Ver fatura e reativar")}
+            """;
+
+        await SendAsync(toEmail, toName, $"{storeName} suspensa por falta de pagamento", body);
+    }
+
+    public async Task SendLojaReativadaAsync(string toEmail, string toName, string storeName, string lojaUrl)
+    {
+        var safeName  = WebUtility.HtmlEncode(toName);
+        var safeStore = WebUtility.HtmlEncode(storeName);
+
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>Pagamento confirmado. A <strong>{safeStore}</strong> já está no ar de novo, com tudo como estava.</p>
+            {BotaoCobranca(lojaUrl, "Abrir o painel")}
+            """;
+
+        await SendAsync(toEmail, toName, $"{storeName} reativada", body);
+    }
+
     public async Task SendWelcomeAsync(string toEmail, string toName)
     {
         var cfg  = await GetSiteConfigAsync();

@@ -384,6 +384,7 @@ builder.Services.AddHealthChecks()
 // ---------------------------------------------------------------------------
 builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IAccountLocatorService, AccountLocatorService>();
+builder.Services.AddScoped<ITenantSignupService, TenantSignupService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<ICategoryService,     CategoryService>();
@@ -398,6 +399,10 @@ builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantSer
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<IProspectingCampaignService, ProspectingCampaignService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
+builder.Services.AddScoped<ICondicoesComerciaisService, CondicoesComerciaisService>();
+// Singleton: abre o próprio escopo (no tenant-zero) a cada aviso, e os avisos
+// disparados pelo webhook rodam depois que a requisição já terminou.
+builder.Services.AddSingleton<IPlatformBillingNotifier, PlatformBillingNotifier>();
 
 // Gateway da mensalidade da plataforma (RB-01). Registrado sempre: o serviço
 // checa IsConfigured e opera em modo manual quando a chave não está presente, o
