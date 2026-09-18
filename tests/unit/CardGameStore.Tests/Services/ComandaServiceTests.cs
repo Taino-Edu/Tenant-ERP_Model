@@ -146,6 +146,13 @@ public class ComandaServiceTests
         owner.Comandas.Add(second);
         owner.Crediarios.Add(debt);
         await owner.SaveChangesAsync();
+        // Sem isto o teste falhava às vezes na CI (2200 esperado, 1500 gravado), e o
+        // defeito era do teste, não do serviço: o crediário ficava rastreado no
+        // owner com ValorEmCentavos=1000. Quando o fechamento do `concurrent`
+        // terminava primeiro (1000+700), a consulta do owner, já sob o advisory
+        // lock, recebia pela resolução de identidade do EF a instância velha em
+        // memória e gravava 1000+500. Em produção cada request tem DbContext novo.
+        owner.ChangeTracker.Clear();
 
         await Task.WhenAll(
             CreateService(owner).CloseComandaAsync(first.Id, Guid.NewGuid(),
