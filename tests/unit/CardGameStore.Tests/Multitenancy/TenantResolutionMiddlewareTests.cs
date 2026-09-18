@@ -136,6 +136,62 @@ public class TenantResolutionMiddlewareTests
         ctx.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
     }
 
+    [Theory]
+    [InlineData("/api/auth/login")]
+    [InlineData("/api/auth/refresh")]
+    [InlineData("/api/auth/logout")]
+    [InlineData("/api/assinatura")]
+    [InlineData("/api/assinatura/faturamento")]
+    public async Task InvokeAsync_LojaSuspensa_DeixaODonoEntrarEPagar(string caminho)
+    {
+        var catalog = CreateCatalogDb();
+        var id = Guid.NewGuid();
+        catalog.Tenants.Add(new Tenant
+        {
+            Id = id, Slug = "loja-devendo", SchemaName = "tenant_loja_devendo", Status = TenantStatus.Suspended,
+        });
+        await catalog.SaveChangesAsync();
+
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("loja-devendo.3esysten.com.br", services);
+        ctx.Request.Path = caminho;
+        var chamouProximo = false;
+
+        var middleware = CreateMiddleware(_ => { chamouProximo = true; return Task.CompletedTask; }, rootDomain: "3esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        chamouProximo.Should().BeTrue();
+        tenantContext.TenantId.Should().Be(id, "a Assinatura precisa ler a fatura da loja certa");
+    }
+
+    [Theory]
+    [InlineData("/api/siteconfig")]
+    [InlineData("/api/auth/register")]
+    [InlineData("/api/auth/quick-login")]
+    [InlineData("/api/assinaturas")]
+    [InlineData("/api/products")]
+    public async Task InvokeAsync_LojaSuspensa_ContinuaFechadaParaOResto(string caminho)
+    {
+        var catalog = CreateCatalogDb();
+        catalog.Tenants.Add(new Tenant
+        {
+            Slug = "loja-devendo", SchemaName = "tenant_loja_devendo", Status = TenantStatus.Suspended,
+        });
+        await catalog.SaveChangesAsync();
+
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("loja-devendo.3esysten.com.br", services);
+        ctx.Request.Path = caminho;
+        ctx.Response.Body = new MemoryStream();
+
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        ctx.Response.Body.Position = 0;
+        new StreamReader(ctx.Response.Body).ReadToEnd().Should().Contain("tenant_suspended");
+    }
+
     [Fact]
     public async Task InvokeAsync_TenantComMigrationFalha_Retorna503SemAcessarSchema()
     {

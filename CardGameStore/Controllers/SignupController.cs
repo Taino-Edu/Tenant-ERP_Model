@@ -2,10 +2,14 @@
 // SignupController.cs — O lojista cria a própria loja pelo site, sem passar por
 // ninguém. SEM autenticação.
 //
-//   GET  /api/signup/slug?slug=   → o endereço está livre?
-//   POST /api/signup              → grava o pedido e manda o link por e-mail
-//   POST /api/signup/confirmar    → o link foi clicado: cria a loja e devolve o
-//                                   ticket de entrada no subdomínio dela
+//   GET  /api/signup/slug?slug=          → o endereço está livre?
+//   POST /api/signup                     → grava o pedido e manda o link por e-mail
+//   POST /api/signup/confirmar/verificar → o link ainda serve? (antes de pedir a senha)
+//   POST /api/signup/confirmar           → token + senha: cria a loja e devolve o
+//                                          ticket de entrada no subdomínio dela
+//
+// O token vai sempre no corpo, nunca na query string: é credencial, e URL de API
+// acaba em log de acesso do nginx.
 //
 // Só responde no domínio raiz. Num subdomínio de loja isso não tem uso nenhum e
 // só abriria mais uma porta anônima dentro de cada tenant.
@@ -69,7 +73,26 @@ public class SignupController : ControllerBase
         };
     }
 
-    /// <summary>Confirma o e-mail, cria a loja e devolve o ticket para entrar nela já logado.</summary>
+    /// <summary>Diz se o link do e-mail ainda cria a loja, sem reservar nem criar nada.</summary>
+    [HttpPost("confirmar/verificar")]
+    [EnableRateLimiting("public-signup-check")]
+    public async Task<IActionResult> VerificarLink([FromBody] VerificarLinkDeLojaRequest request, CancellationToken ct)
+    {
+        if (ForaDoDominioRaiz) return NotFound();
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var resultado = await _signup.VerificarLinkAsync(request.Token, ct);
+        return resultado.Status switch
+        {
+            LinkDeLojaStatus.Valido => Ok(new LinkDeLojaDto { Slug = resultado.Slug!, NomeLoja = resultado.NomeLoja! }),
+            LinkDeLojaStatus.Expirado => LinkExpirado(),
+            LinkDeLojaStatus.JaConfirmada => LojaJaCriada(resultado.Slug),
+            _ => LinkInvalido(),
+        };
+    }
+
+    /// <summary>Confirma o e-mail, grava a senha escolhida agora, cria a loja e devolve
+    /// o ticket para entrar nela já logado.</summary>
     [HttpPost("confirmar")]
     [EnableRateLimiting("public-signup-check")]
     public async Task<IActionResult> Confirmar([FromBody] ConfirmarLojaRequest request)
@@ -78,18 +101,27 @@ public class SignupController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         // Sem o CancellationToken da requisição de propósito: ver ConfirmarAsync.
-        var resultado = await _signup.ConfirmarAsync(request.Token);
+        var resultado = await _signup.ConfirmarAsync(request.Token, request.Senha);
         return resultado.Status switch
         {
             ConfirmacaoStatus.Criada => Ok(new { resultado.Slug, resultado.Ticket }),
-            ConfirmacaoStatus.TokenInvalido => NotFound(new { Message = "Link de confirmação inválido.", ErrorCode = "token_invalido" }),
-            ConfirmacaoStatus.Expirado => StatusCode(StatusCodes.Status410Gone,
-                new { Message = "O link de confirmação expirou.", ErrorCode = "expirado" }),
-            ConfirmacaoStatus.JaConfirmada => Conflict(new { Message = "Esta loja já foi criada.", ErrorCode = "ja_confirmada", resultado.Slug }),
+            ConfirmacaoStatus.TokenInvalido => LinkInvalido(),
+            ConfirmacaoStatus.Expirado => LinkExpirado(),
+            ConfirmacaoStatus.SenhaInvalida => BadRequest(new { Message = resultado.Mensagem, ErrorCode = "senha_invalida" }),
+            ConfirmacaoStatus.JaConfirmada => LojaJaCriada(resultado.Slug),
             ConfirmacaoStatus.EmAndamento => Conflict(new { Message = "A loja está sendo criada.", ErrorCode = "em_andamento", resultado.Slug }),
             ConfirmacaoStatus.SlugIndisponivel => Conflict(new { Message = resultado.Mensagem, ErrorCode = "slug_indisponivel", resultado.Slug }),
             _ => StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { Message = resultado.Mensagem, ErrorCode = "indisponivel", resultado.Slug }),
         };
     }
+
+    private NotFoundObjectResult LinkInvalido() =>
+        NotFound(new { Message = "Link de confirmação inválido.", ErrorCode = "token_invalido" });
+
+    private ObjectResult LinkExpirado() =>
+        StatusCode(StatusCodes.Status410Gone, new { Message = "O link de confirmação expirou.", ErrorCode = "expirado" });
+
+    private ConflictObjectResult LojaJaCriada(string? slug) =>
+        Conflict(new { Message = "Esta loja já foi criada.", ErrorCode = "ja_confirmada", Slug = slug });
 }

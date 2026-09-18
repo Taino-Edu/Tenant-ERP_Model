@@ -63,7 +63,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
     // ── Pedido ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Solicitar_GuardaSoHashesEEnviaOLinkDeConfirmacao()
+    public async Task Solicitar_GuardaSoOHashDoTokenEEnviaOLinkDeConfirmacao()
     {
         await using var db = NovoContexto();
 
@@ -75,8 +75,6 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         var signup = await db.TenantSignups.AsNoTracking().SingleAsync();
         signup.TokenHash.Should().Be(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(TokenDoLink()))),
             "o token só pode existir no e-mail; o banco guarda o hash");
-        signup.PasswordHash.Should().NotContain(Senha);
-        BCrypt.Net.BCrypt.Verify(Senha, signup.PasswordHash).Should().BeTrue();
         signup.Email.Should().Be("ana@example.com");
         signup.PlanName.Should().Be(TenantSignupService.PlanoPadrao);
         signup.ExpiresAt.Should().BeCloseTo(DateTime.UtcNow.AddHours(24), TimeSpan.FromMinutes(1));
@@ -148,6 +146,43 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
             "um pedido sem e-mail enviado só reservaria o endereço de alguém que nunca vai receber o link");
     }
 
+    // ── Link ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task VerificarLink_MostraALojaSemReservarNemCriarNada()
+    {
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        await servico.SolicitarAsync(Pedido());
+
+        var resultado = await servico.VerificarLinkAsync(TokenDoLink());
+
+        resultado.Should().Be(new LinkDeLojaResultado(LinkDeLojaStatus.Valido, "emporio-da-ana", "Empório da Ana"));
+        (await db.TenantSignups.AsNoTracking().SingleAsync()).ConfirmationStartedAt
+            .Should().BeNull("abrir a página do link não pode travar a confirmação de ninguém");
+        _provisioning.Invocations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerificarLink_RecusaTokenDesconhecidoExpiradoOuJaUsado()
+    {
+        ProvisionamentoCriaLoja();
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        await servico.SolicitarAsync(Pedido());
+
+        (await servico.VerificarLinkAsync("token-que-nunca-existiu"))
+            .Should().Be(new LinkDeLojaResultado(LinkDeLojaStatus.TokenInvalido));
+
+        await db.TenantSignups.ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddMinutes(-1)));
+        (await servico.VerificarLinkAsync(TokenDoLink())).Status.Should().Be(LinkDeLojaStatus.Expirado);
+
+        await db.TenantSignups.ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddHours(1)));
+        await servico.ConfirmarAsync(TokenDoLink(), Senha);
+        (await servico.VerificarLinkAsync(TokenDoLink()))
+            .Should().Be(new LinkDeLojaResultado(LinkDeLojaStatus.JaConfirmada, "emporio-da-ana"));
+    }
+
     // ── Confirmação ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -158,7 +193,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         var servico = NovoServico(db);
         await servico.SolicitarAsync(Pedido());
 
-        var resultado = await servico.ConfirmarAsync(TokenDoLink());
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), Senha);
 
         resultado.Status.Should().Be(ConfirmacaoStatus.Criada);
         resultado.Slug.Should().Be("emporio-da-ana");
@@ -186,12 +221,87 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         var signup = await db.TenantSignups.AsNoTracking().SingleAsync();
         signup.ConfirmedAt.Should().NotBeNull();
         signup.TenantId.Should().Be(ticket.TenantId!.Value);
-        signup.PasswordHash.Should().BeNull("depois que a loja nasce, a cópia do hash não tem mais motivo pra existir");
 
-        var repetido = await servico.ConfirmarAsync(TokenDoLink());
+        var repetido = await servico.ConfirmarAsync(TokenDoLink(), "outra-senha-qualquer");
         repetido.Status.Should().Be(ConfirmacaoStatus.JaConfirmada);
         repetido.Ticket.Should().BeNull("clicar de novo no link não pode virar um jeito de entrar na loja sem senha");
-        _provisioning.Invocations.Should().HaveCount(1);
+        _provisioning.Invocations.Should().HaveCount(1, "confirmar de novo não pode trocar a senha de uma loja que já existe");
+    }
+
+    [Fact]
+    public async Task Confirmar_PedidoFeitoComOEmailDeOutraPessoaNaoDefineASenhaDaLoja()
+    {
+        // O ataque que motivou a senha na confirmação: alguém pede a loja com o
+        // e-mail de um lojista, o lojista recebe o link legítimo e clica. A senha
+        // do admin tem que ser a de quem abriu o e-mail, e não existir antes disso.
+        ProvisionamentoCriaLoja();
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        await servico.SolicitarAsync(Pedido());
+
+        var colunas = await db.Database.SqlQueryRaw<string>(
+                "SELECT column_name AS \"Value\" FROM information_schema.columns WHERE table_schema = {0} AND table_name = 'tenant_signups'",
+                _schema)
+            .ToListAsync();
+        colunas.Should().NotContain(c => c.Contains("password"), "o pedido anônimo não pode carregar senha nenhuma");
+
+        await servico.ConfirmarAsync(TokenDoLink(), "senha-de-quem-abriu-o-email");
+
+        var dono = (TenantOwnerProfile)_provisioning.Invocations.Should().ContainSingle().Subject.Arguments[8];
+        BCrypt.Net.BCrypt.Verify("senha-de-quem-abriu-o-email", dono.PasswordHash).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("curta12")]
+    public async Task Confirmar_SenhaForaDaRegraNaoReservaNemCriaLoja(string? senha)
+    {
+        ProvisionamentoCriaLoja();
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        await servico.SolicitarAsync(Pedido());
+
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), senha);
+
+        resultado.Status.Should().Be(ConfirmacaoStatus.SenhaInvalida);
+        _provisioning.Invocations.Should().BeEmpty();
+        (await db.TenantSignups.AsNoTracking().SingleAsync()).ConfirmationStartedAt
+            .Should().BeNull("a pessoa corrige a senha e confirma de novo pelo mesmo link");
+    }
+
+    [Fact]
+    public async Task Confirmar_SenhaAcimaDoQueOBcryptGuardaERecusada()
+    {
+        ProvisionamentoCriaLoja();
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        await servico.SolicitarAsync(Pedido());
+
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), new string('a', TenantSignupSenha.Maximo + 1));
+
+        resultado.Status.Should().Be(ConfirmacaoStatus.SenhaInvalida);
+        _provisioning.Invocations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Confirmar_DocumentoDoCadastroVaiParaALojaESaiDoPedido()
+    {
+        ProvisionamentoCriaLoja();
+        await using var db = NovoContexto();
+        var servico = NovoServico(db);
+        var pedido = Pedido();
+        pedido.Documento = "11.222.333/0001-81";
+        await servico.SolicitarAsync(pedido);
+
+        (await db.TenantSignups.AsNoTracking().SingleAsync()).BillingDocument.Should().Be("11222333000181");
+
+        await servico.ConfirmarAsync(TokenDoLink(), Senha);
+
+        var dono = (TenantOwnerProfile)_provisioning.Invocations.Should().ContainSingle().Subject.Arguments[8];
+        dono.BillingDocument.Should().Be("11222333000181", "quem informou o documento recebe a fatura sem passar pela Assinatura");
+        (await db.TenantSignups.AsNoTracking().SingleAsync()).BillingDocument.Should().BeNull(
+            "o documento já está na loja; a cópia no pedido seria dado pessoal guardado duas vezes");
     }
 
     [Fact]
@@ -203,7 +313,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         await servico.SolicitarAsync(Pedido());
         await db.TenantSignups.ExecuteUpdateAsync(s => s.SetProperty(x => x.ExpiresAt, DateTime.UtcNow.AddMinutes(-1)));
 
-        var resultado = await servico.ConfirmarAsync(TokenDoLink());
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), Senha);
 
         resultado.Status.Should().Be(ConfirmacaoStatus.Expirado);
         _provisioning.Invocations.Should().BeEmpty();
@@ -214,7 +324,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
     {
         await using var db = NovoContexto();
 
-        var resultado = await NovoServico(db).ConfirmarAsync("token-que-nunca-existiu");
+        var resultado = await NovoServico(db).ConfirmarAsync("token-que-nunca-existiu", Senha);
 
         resultado.Should().Be(new ConfirmarLojaResultado(ConfirmacaoStatus.TokenInvalido));
     }
@@ -230,8 +340,8 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         await using var db1 = NovoContexto();
         await using var db2 = NovoContexto();
         var resultados = await Task.WhenAll(
-            NovoServico(db1).ConfirmarAsync(token),
-            NovoServico(db2).ConfirmarAsync(token));
+            NovoServico(db1).ConfirmarAsync(token, Senha),
+            NovoServico(db2).ConfirmarAsync(token, Senha));
 
         resultados.Select(r => r.Status).Should().BeEquivalentTo(
             [ConfirmacaoStatus.Criada, ConfirmacaoStatus.EmAndamento]);
@@ -253,7 +363,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         var servico = NovoServico(db, maxLojasPorDia: 1);
         await servico.SolicitarAsync(Pedido());
 
-        var resultado = await servico.ConfirmarAsync(TokenDoLink());
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), Senha);
 
         resultado.Status.Should().Be(ConfirmacaoStatus.LimiteDiario);
         _provisioning.Invocations.Should().BeEmpty();
@@ -273,12 +383,12 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
         var servico = NovoServico(db);
         await servico.SolicitarAsync(Pedido());
 
-        var resultado = await servico.ConfirmarAsync(TokenDoLink());
+        var resultado = await servico.ConfirmarAsync(TokenDoLink(), Senha);
 
         resultado.Status.Should().Be(ConfirmacaoStatus.Falhou);
         var signup = await db.TenantSignups.AsNoTracking().SingleAsync();
         signup.ConfirmationStartedAt.Should().BeNull("sem liberar a reserva, o próximo clique esperaria 5 minutos à toa");
-        signup.PasswordHash.Should().NotBeNull("o cadastro continua valendo para a próxima tentativa");
+        signup.ConfirmedAt.Should().BeNull("o cadastro continua valendo para a próxima tentativa");
     }
 
     // ── Apoio ────────────────────────────────────────────────────────────────
@@ -326,7 +436,7 @@ public sealed class TenantSignupServiceTests : IAsyncLifetime
     private static SolicitarLojaRequest Pedido(string slug = "emporio-da-ana", string email = "ana@example.com") => new()
     {
         NomeResponsavel = "Ana Souza", Email = email, NomeLoja = "Empório da Ana", Slug = slug,
-        Senha = Senha, PrivacyNoticeAcknowledged = true, PrivacyNoticeVersion = "2.2",
+        PrivacyNoticeAcknowledged = true, PrivacyNoticeVersion = "2.2",
     };
 
     private string TokenDoLink()

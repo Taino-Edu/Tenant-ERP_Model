@@ -37,6 +37,10 @@ public class PlatformController : ControllerBase
     private readonly string? _connectionString;
     private readonly TenantDatabaseAdmin _databaseAdmin;
 
+    /// <summary>Opcional pelo mesmo motivo das dependências opcionais do
+    /// PlatformBillingService: os testes deste controller montam só o que usam.</summary>
+    private readonly IPlatformBillingService? _billing;
+
     // Formato básico de domínio (labels alfanuméricos/hífen, pelo menos um ponto) — não
     // valida se o domínio existe/resolve de verdade, só barra lixo óbvio antes de gravar.
     private static readonly Regex DomainPattern = new(
@@ -49,8 +53,10 @@ public class PlatformController : ControllerBase
         IServiceScopeFactory scopeFactory,
         Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
         TenantDatabaseAdmin databaseAdmin,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IPlatformBillingService? billing = null)
     {
+        _billing      = billing;
         _catalog      = catalog;
         _provisioning = provisioning;
         _logger       = logger;
@@ -199,7 +205,23 @@ public class PlatformController : ControllerBase
         // RemoverMaxUsers explícito é o único jeito de voltar a "sem limite" por aqui
         // (achado de review: null omitido e null explícito são indistinguíveis em JSON).
         tenant.MaxUsers = request.RemoverMaxUsers ? null : (request.MaxUsers ?? tenant.MaxUsers);
+
+        // Implantação com valor e sem data combinada não geraria parcela nenhuma
+        // — o campo da lista de lojas pareceria salvo e nada seria cobrado.
+        if (tenant.SetupFee > 0 && tenant.SetupFirstDueDate is null)
+            tenant.SetupFirstDueDate = CardGameStore.Services.CondicoesComerciais
+                .PrimeiroVencimentoPadraoDaImplantacao(tenant, DateTime.UtcNow);
+
         await _catalog.SaveChangesAsync();
+
+        // Mensalidade, implantação e início mexidos pela lista de lojas valem
+        // pras cobranças em aberto do mesmo jeito que pela tela de condições.
+        if (_billing is not null)
+        {
+            var sincronizacao = await _billing.SincronizarCobrancasDaLojaAsync(tenant.Id, CancellationToken.None);
+            foreach (var pendencia in sincronizacao.Pendencias)
+                _logger.LogWarning("Condições do tenant {Slug} não aplicadas por completo: {Pendencia}", tenant.Slug, pendencia);
+        }
 
         return Ok(ToDto(tenant));
     }
@@ -1059,18 +1081,13 @@ public class PlatformController : ControllerBase
                 referral.UpdatedAt = DateTime.UtcNow;
             }
 
-            if (tenant.SetupFee > 0 && !await _catalog.TenantCharges.AnyAsync(c =>
-                    c.TenantId == tenant.Id && c.Kind == TenantChargeKind.Implantacao))
-            {
-                var created = tenant.CreatedAt.ToUniversalTime();
-                _catalog.TenantCharges.Add(new TenantCharge
-                {
-                    TenantId = tenant.Id, Kind = TenantChargeKind.Implantacao, Amount = tenant.SetupFee,
-                    ReferenceMonth = new DateTime(created.Year, created.Month, 1, 0, 0, 0, DateTimeKind.Utc),
-                    DueDate = created.Date,
-                    Notes = "Implantação gerada automaticamente pela conversão do CRM.",
-                });
-            }
+            // A implantação sai pelas condições comerciais (parcelada, se foi
+            // negociado assim), e não mais como cobrança única lançada aqui: as
+            // duas coisas juntas cobrariam a implantação duas vezes. Só falta a
+            // data, quando ninguém a combinou — o gerador cuida do resto.
+            if (tenant.SetupFee > 0 && tenant.SetupFirstDueDate is null)
+                tenant.SetupFirstDueDate = CardGameStore.Services.CondicoesComerciais
+                    .PrimeiroVencimentoPadraoDaImplantacao(tenant, DateTime.UtcNow);
         }
         lead.UpdatedAt         = DateTime.UtcNow;
         if (previousPrivacy.LegalBasis != lead.LegalBasis || previousPrivacy.DataOriginDetails != lead.DataOriginDetails ||

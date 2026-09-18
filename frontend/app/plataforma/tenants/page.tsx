@@ -415,9 +415,9 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
       </div>
       {/* Editável, e não mais um rótulo: a implantação é moeda de troca no
           fechamento — precisa dar pra baixar, subir e zerar por loja. Zero é
-          um valor legítimo aqui: o backend só gera a cobrança de implantação
-          quando o valor é maior que zero (PlatformController, geração de
-          mensalidades), então zerar equivale a "sem taxa". */}
+          "sem taxa". Com valor, o gerador cobra de uma vez, com vencimento
+          padrão; parcelamento e data combinada ficam nas condições da loja
+          (aba Cobranças). */}
       <div className="flex items-center gap-1 mt-0.5">
         <span className="text-[10px] text-gray-500 shrink-0">implantação R$</span>
         <input

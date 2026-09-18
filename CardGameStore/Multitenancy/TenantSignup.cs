@@ -8,10 +8,12 @@
 // uma linha que expira em 24 horas. O schema só nasce quando alguém prova que
 // lê aquela caixa de entrada.
 //
-// O que é segredo fica só em hash: o token do link (SHA-256, como o convite de
-// parceiro) e a senha (BCrypt, o mesmo formato de User.PasswordHash, para ir
-// direto ao admin sem nunca ter existido em texto puro no banco). A senha é
-// apagada assim que a loja nasce.
+// O token do link fica só em hash (SHA-256, como o convite de parceiro).
+//
+// Senha não passa por aqui. O pedido é anônimo: se a senha fosse escolhida nele,
+// quem digitasse o e-mail de outra pessoa definiria a senha da loja que essa
+// pessoa criaria ao clicar no link, e entraria nela depois. A senha só é pedida
+// na confirmação, por quem abriu o e-mail, e vai direto para o admin.
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -53,16 +55,15 @@ public class TenantSignup
     [Column("plan_name")]
     public string PlanName { get; set; } = string.Empty;
 
-    /// <summary>BCrypt da senha escolhida no formulário. Null depois da confirmação:
-    /// a partir dali a senha mora no User do admin, e manter a cópia aqui só
-    /// dobraria o que vaza se o catálogo vazar.</summary>
-    [MaxLength(100)]
-    [Column("password_hash")]
-    public string? PasswordHash { get; set; }
-
     [MaxLength(30)]
     [Column("phone")]
     public string? Phone { get; set; }
+
+    /// <summary>CPF ou CNPJ de cobrança, só dígitos. Vira Tenant.BillingCnpj
+    /// quando a loja nasce.</summary>
+    [MaxLength(14)]
+    [Column("billing_document")]
+    public string? BillingDocument { get; set; }
 
     /// <summary>Qual texto de /privacidade a pessoa viu ao marcar a ciência.</summary>
     [Required, MaxLength(20)]

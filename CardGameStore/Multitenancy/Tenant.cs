@@ -194,9 +194,33 @@ public class Tenant
     /// instante em que alguém edita a data à mão. Null = billing ainda não
     /// definido (tenant provisionado antes deste campo existir).
     ///
-    /// O dia do vencimento é o dia desta data — não há campo separado de propósito,
-    /// pra não criar duas fontes de verdade pro mesmo dado. Vencimento configurável
-    /// independente da data de início é refinamento futuro, se algum cliente pedir.</summary>
+    /// A primeira mensalidade vence exatamente nesta data. As seguintes vencem em
+    /// <see cref="BillingDueDay"/> — ou, quando ele é null, no mesmo dia desta
+    /// data, que era a única regra até a negociação por loja existir.</summary>
     [Column("billing_starts_on")]
     public DateTime? BillingStartsOn { get; set; }
+
+    // ── Condições negociadas (ver CondicoesComerciais) ───────────────────────
+    // Tudo aqui é lido pelo gerador a cada competência: negociar é editar isto
+    // uma vez, e as cobranças seguintes já saem certas sem ninguém lembrar.
+
+    /// <summary>Dia do mês em que a mensalidade vence, a partir da segunda.
+    /// Null = o dia de <see cref="BillingStartsOn"/>. Existe separado porque
+    /// "começa dia 20, mas vence todo dia 5" é pedido comum de negociação, e
+    /// amarrar os dois obrigava a escolher entre o fim do teste e o dia do caixa
+    /// do cliente. Dia 29 a 31 cai no último dia em mês curto.</summary>
+    [Column("billing_due_day")]
+    public int? BillingDueDay { get; set; }
+
+    /// <summary>Em quantas parcelas mensais <see cref="SetupFee"/> é cobrada.
+    /// Uma parcela por competência, que é o que o índice único de
+    /// <see cref="TenantCharge"/> já comporta sem mudar.</summary>
+    [Column("setup_installments")]
+    public int SetupInstallments { get; set; } = 1;
+
+    /// <summary>Vencimento da primeira parcela da implantação. As demais caem no
+    /// mesmo dia dos meses seguintes. Null com SetupFee maior que zero = nenhuma
+    /// parcela é gerada (implantação ainda sem data combinada).</summary>
+    [Column("setup_first_due_date")]
+    public DateTime? SetupFirstDueDate { get; set; }
 }

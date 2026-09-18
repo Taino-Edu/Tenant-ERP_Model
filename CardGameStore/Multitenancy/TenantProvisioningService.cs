@@ -200,6 +200,7 @@ public class TenantProvisioningService : ITenantProvisioningService
             // cobrança até informar outro e-mail em /admin/assinatura.
             tenant.DisplayName  = owner.StoreName;
             tenant.BillingEmail = adminEmail!.Trim().ToLowerInvariant();
+            tenant.BillingCnpj  = string.IsNullOrWhiteSpace(owner.BillingDocument) ? null : owner.BillingDocument;
         }
 
         // Billing: preenche a partir da tabela vigente e das regras comerciais

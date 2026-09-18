@@ -13,7 +13,7 @@
 
 import Link from 'next/link'
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Check, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react'
+import { ArrowRight, Check, Loader2, MailCheck, X } from 'lucide-react'
 import { signupApi } from '@/lib/api'
 import { dominioDasLojas, enderecoDaLoja, PLANO_ESCOLHIDO_EVENT, SLUG_MAX, slugDaLoja, slugValido } from '@/lib/criarLoja'
 import { PRIVACY_NOTICE_VERSION, publicFormErrorMessage } from '@/lib/institucional'
@@ -44,9 +44,8 @@ export default function CriarLojaForm() {
   const [nomeLoja, setNomeLoja] = useState('')
   const [slug, setSlug] = useState('')
   const [slugEditadoAMao, setSlugEditadoAMao] = useState(false)
-  const [senha, setSenha] = useState('')
-  const [mostrarSenha, setMostrarSenha] = useState(false)
   const [whatsApp, setWhatsApp] = useState('')
+  const [documento, setDocumento] = useState('')
   const [ciente, setCiente] = useState(false)
   const [plano, setPlano] = useState(PLANO_PADRAO)
   const [endereco, setEndereco] = useState<EstadoDoEndereco>({ tipo: 'vazio' })
@@ -121,8 +120,8 @@ export default function CriarLojaForm() {
         email: email.trim(),
         nomeLoja: nomeLoja.trim(),
         slug,
-        senha,
         whatsApp: whatsApp.trim() || undefined,
+        documento: documento.trim() || undefined,
         plano,
         privacyNoticeAcknowledged: ciente,
         privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
@@ -156,8 +155,8 @@ export default function CriarLojaForm() {
         <MailCheck size={42} className="text-emerald-400" />
         <h3 className="mt-5 text-2xl font-black">Confirme seu e-mail</h3>
         <p className="mt-3 max-w-md leading-7 text-slate-300">
-          Enviamos um link para <strong className="text-white">{enviadoPara}</strong>. Clique nele e a loja{' '}
-          <strong className="text-white">{enderecoDaLoja(slug)}</strong> fica pronta na hora.
+          Enviamos um link para <strong className="text-white">{enviadoPara}</strong>. Nele você cria a sua senha e a
+          loja <strong className="text-white">{enderecoDaLoja(slug)}</strong> fica pronta na hora.
         </p>
         <p className="mt-4 text-sm text-slate-400">O link vale por 24 horas. Não chegou? Confira o spam e a aba Promoções.</p>
         <button type="button" onClick={() => setEnviadoPara(null)} className="mt-6 text-sm font-bold text-octus-300 underline">
@@ -239,34 +238,17 @@ export default function CriarLojaForm() {
         </p>
       </div>
 
-      <div>
-        <label htmlFor="criar-loja-senha" className="text-sm font-bold">Senha</label>
-        <div className="relative">
-          <input
-            id="criar-loja-senha"
-            required
-            minLength={8}
-            maxLength={72}
-            type={mostrarSenha ? 'text' : 'password'}
-            autoComplete="new-password"
-            value={senha}
-            onChange={e => setSenha(e.target.value)}
-            className={`${CAMPO} pr-11`}
-            placeholder="Mínimo de 8 caracteres"
-          />
-          <button
-            type="button"
-            onClick={() => setMostrarSenha(v => !v)}
-            aria-label={mostrarSenha ? 'Esconder senha' : 'Mostrar senha'}
-            className="absolute right-3 top-1/2 mt-1 -translate-y-1/2 text-slate-400 hover:text-white"
-          >
-            {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </div>
-      </div>
+      {/* Sem campo de senha aqui, de propósito: ela é criada na página do link
+          do e-mail, por quem provou ser dono do endereço. Ver TenantSignupService. */}
       <label className="text-sm font-bold">
         WhatsApp <span className="font-normal text-slate-400">(opcional)</span>
         <input maxLength={30} autoComplete="tel" value={whatsApp} onChange={e => setWhatsApp(e.target.value)} className={CAMPO} placeholder="(17) 99999-9999" />
+      </label>
+      {/* Opcional de propósito: o teste grátis não depende dele. Quem informa
+          já recebe a primeira fatura sozinho quando o teste acaba. */}
+      <label className="text-sm font-bold">
+        CPF ou CNPJ <span className="font-normal text-slate-400">(opcional)</span>
+        <input maxLength={18} inputMode="numeric" value={documento} onChange={e => setDocumento(e.target.value)} className={CAMPO} placeholder="Para a fatura depois do teste" />
       </label>
 
       <label className="flex items-start gap-3 text-xs leading-relaxed text-slate-300 sm:col-span-2">

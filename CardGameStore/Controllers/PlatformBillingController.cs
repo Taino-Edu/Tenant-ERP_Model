@@ -6,6 +6,7 @@
 // plataforma, não da loja. Nenhum lojista pode chegar aqui.
 // =============================================================================
 
+using System.IdentityModel.Tokens.Jwt;
 using CardGameStore.DTOs;
 using CardGameStore.Services.Interfaces;
 using CardGameStore.Security;
@@ -21,12 +22,17 @@ namespace CardGameStore.Controllers;
 public class PlatformBillingController : ControllerBase
 {
     private readonly IPlatformBillingService _billing;
+    private readonly ICondicoesComerciaisService _condicoes;
     private readonly ILogger<PlatformBillingController> _logger;
 
-    public PlatformBillingController(IPlatformBillingService billing, ILogger<PlatformBillingController> logger)
+    public PlatformBillingController(
+        IPlatformBillingService billing,
+        ICondicoesComerciaisService condicoes,
+        ILogger<PlatformBillingController> logger)
     {
-        _billing = billing;
-        _logger  = logger;
+        _billing   = billing;
+        _condicoes = condicoes;
+        _logger    = logger;
     }
 
     /// <summary>Painel do mês: MRR contratado, faturado, recebido, em aberto e
@@ -141,6 +147,64 @@ public class PlatformBillingController : ControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning("Falha ao excluir a cobrança {Id}: {Msg}", id, ex.Message);
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    // ── Condições comerciais ────────────────────────────────────────────────
+    // O combinado com a loja. Toda escrita já aplica o resultado às cobranças em
+    // aberto e devolve o que mudou nelas, pra quem negociou ver na hora se alguma
+    // fatura emitida não pôde ser trocada.
+
+    /// <summary>Condições da loja, descontos e a prévia dos próximos 12 meses.</summary>
+    [HttpGet("tenants/{tenantId:guid}/condicoes")]
+    public async Task<IActionResult> Condicoes(Guid tenantId)
+        => await Executar(() => _condicoes.ObterAsync(tenantId), tenantId);
+
+    /// <summary>Mensalidade, início, dia de vencimento e implantação parcelada.</summary>
+    [HttpPut("tenants/{tenantId:guid}/condicoes")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> AtualizarCondicoes(Guid tenantId, [FromBody] AtualizarCondicoesRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await Executar(() => _condicoes.AtualizarAsync(tenantId, request), tenantId);
+    }
+
+    [HttpPost("tenants/{tenantId:guid}/descontos")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> CriarDesconto(Guid tenantId, [FromBody] SalvarDescontoRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var autor = User.FindFirst(JwtRegisteredClaimNames.Name)?.Value
+                 ?? User.FindFirst(JwtRegisteredClaimNames.Email)?.Value
+                 ?? User.Identity?.Name;
+
+        return await Executar(() => _condicoes.CriarDescontoAsync(tenantId, request, autor), tenantId);
+    }
+
+    [HttpPut("tenants/{tenantId:guid}/descontos/{descontoId:guid}")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> AtualizarDesconto(Guid tenantId, Guid descontoId, [FromBody] SalvarDescontoRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await Executar(() => _condicoes.AtualizarDescontoAsync(tenantId, descontoId, request), tenantId);
+    }
+
+    [HttpDelete("tenants/{tenantId:guid}/descontos/{descontoId:guid}")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> ExcluirDesconto(Guid tenantId, Guid descontoId)
+        => await Executar(() => _condicoes.ExcluirDescontoAsync(tenantId, descontoId), tenantId);
+
+    private async Task<IActionResult> Executar<T>(Func<Task<T>> acao, Guid tenantId)
+    {
+        try
+        {
+            return Ok(await acao());
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Condições comerciais do tenant {TenantId}: {Msg}", tenantId, ex.Message);
             return BadRequest(new { Message = ex.Message });
         }
     }

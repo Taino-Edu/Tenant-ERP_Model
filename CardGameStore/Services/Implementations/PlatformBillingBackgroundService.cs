@@ -57,6 +57,13 @@ public class PlatformBillingBackgroundService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var billing = scope.ServiceProvider.GetRequiredService<IPlatformBillingService>();
 
+        // Gerar vem antes de emitir: a mensalidade do mês e a parcela de
+        // implantação nascem das condições de cada loja e já saem nesta mesma
+        // rodada. Idempotente — nas outras rodadas do mês não cria nada. Antes
+        // disto, sem alguém clicar em "Gerar mensalidades" todo mês, nenhuma
+        // cobrança existia pra ser emitida.
+        await billing.GerarMensalidadesAsync(DateTime.UtcNow);
+
         var emissao = await billing.EmitirCobrancasPendentesAsync(ct);
 
         if (emissao.Emitidas > 0)
@@ -75,5 +82,11 @@ public class PlatformBillingBackgroundService : BackgroundService
 
         foreach (var slug in regua.Reativados)
             _logger.LogInformation("Loja {Slug} reativada após quitação", slug);
+
+        // Por último, com a régua já aplicada: loja que acabou de ser suspensa
+        // recebe o aviso de suspensão (disparado pela régua), não o de "vai ser".
+        var notifier = scope.ServiceProvider.GetService<IPlatformBillingNotifier>();
+        if (notifier is not null)
+            await notifier.EnviarAvisosDePrazoAsync(ct);
     }
 }

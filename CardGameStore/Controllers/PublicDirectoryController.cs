@@ -86,11 +86,18 @@ public class PublicDirectoryController : ControllerBase
         if (string.IsNullOrWhiteSpace(slug)) return BadRequest();
 
         var tenant = await _catalog.Tenants
-            .Where(t => t.Slug == slug.Trim().ToLowerInvariant() && t.Status == TenantStatus.Active)
-            .Select(t => new { t.Id, t.SchemaName, t.EnabledModules })
+            .Where(t => t.Slug == slug.Trim().ToLowerInvariant())
+            .Select(t => new { t.Id, t.SchemaName, t.EnabledModules, t.Status })
             .FirstOrDefaultAsync();
 
         if (tenant is null) return NotFound(new { errorCode = "tenant_unavailable" });
+
+        // Suspensa continua indisponível pra vitrine (mesmo 404 e mesmo código),
+        // mas o front precisa separar os dois casos numa única página: o /login,
+        // por onde o dono entra pra pagar e reativar. Não é segredo novo — a
+        // própria API da loja já responde "temporariamente suspensa" pra qualquer um.
+        if (tenant.Status != TenantStatus.Active)
+            return NotFound(new { errorCode = "tenant_unavailable", suspended = true });
 
         using var scope = _scopeFactory.CreateScope();
         var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();

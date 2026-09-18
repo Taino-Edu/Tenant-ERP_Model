@@ -16,7 +16,8 @@ import SeverityBadge from '@/components/admin/SeverityBadge'
 import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 import CobrancaFormModal from '@/components/plataforma/CobrancaFormModal'
-import CobrancasTabela, { brl, dataCurta } from '@/components/plataforma/CobrancasTabela'
+import CobrancasTabela, { brl } from '@/components/plataforma/CobrancasTabela'
+import CondicoesComerciaisPainel from '@/components/plataforma/CondicoesComerciaisPainel'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 
 function fmtDateTime(iso: string | null) {
@@ -241,9 +242,10 @@ function LogsTab({ tenantId }: { tenantId: string }) {
 /** Histórico de cobranças da loja, todos os meses. A lista e as ações são as
  *  mesmas do Financeiro (CobrancasTabela); o que muda é o recorte — lá é uma
  *  competência com todas as lojas, aqui é uma loja com todas as competências. */
-function CobrancasTab({ tenant }: { tenant: TenantSummary }) {
+function CobrancasTab({ tenant, onTenantAlterado }: { tenant: TenantSummary; onTenantAlterado: () => void }) {
   const [cobrancas, setCobrancas] = useState<TenantChargeDto[] | null>(null)
   const [lancando, setLancando] = useState(false)
+  const [versaoCobrancas, setVersaoCobrancas] = useState(0)
   const podeLancar = usePlatformPermissions()('platform.finance.manage')
 
   const carregar = useCallback(async () => {
@@ -255,6 +257,12 @@ function CobrancasTab({ tenant }: { tenant: TenantSummary }) {
       setCobrancas([])
     }
   }, [tenant.id])
+
+  // Mexer numa cobrança pela lista também muda a prévia das condições.
+  const cobrancaAlterada = useCallback(async () => {
+    await carregar()
+    setVersaoCobrancas(v => v + 1)
+  }, [carregar])
 
   useEffect(() => { carregar() }, [carregar])
 
@@ -269,13 +277,18 @@ function CobrancasTab({ tenant }: { tenant: TenantSummary }) {
 
   return (
     <div className="space-y-4">
-      {/* O contrato da loja numa linha: é o que se confere antes de lançar ou
-          mexer numa cobrança. Os valores se editam na lista de lojas. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* O combinado com a loja vem antes da lista: é o que se confere (e se
+          renegocia) antes de mexer numa cobrança avulsa. */}
+      <CondicoesComerciaisPainel
+        tenantId={tenant.id}
+        podeEditar={podeLancar}
+        onCobrancasAlteradas={async () => { onTenantAlterado(); await carregar() }}
+        versaoCobrancas={versaoCobrancas}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-600 pt-4">
         <p className="text-sm text-gray-400">
-          Mensalidade <strong className="text-white">{brl(tenant.monthlyPrice)}</strong>
-          {' · '}implantação <strong className="text-white">{brl(tenant.setupFee)}</strong>
-          {' · '}1ª cobrança <strong className="text-white">{tenant.billingStartsOn ? dataCurta(tenant.billingStartsOn) : 'não definida'}</strong>
+          Histórico de cobranças
           {' · '}em aberto <strong className={emAberto > 0 ? 'text-amber-300' : 'text-white'}>{brl(emAberto)}</strong>
         </p>
         {podeLancar && (
@@ -293,7 +306,7 @@ function CobrancasTab({ tenant }: { tenant: TenantSummary }) {
 
       {cobrancas.length === 0
         ? <p className="text-gray-400 text-center py-10">Nenhuma cobrança desta loja ainda.</p>
-        : <CobrancasTabela cobrancas={cobrancas} podeLancar={podeLancar} mostrarLoja={false} onAlterado={carregar} />}
+        : <CobrancasTabela cobrancas={cobrancas} podeLancar={podeLancar} mostrarLoja={false} onAlterado={cobrancaAlterada} />}
 
       {lancando && (
         <CobrancaFormModal
@@ -301,7 +314,7 @@ function CobrancasTab({ tenant }: { tenant: TenantSummary }) {
           tenantFixo={{ id: tenant.id, slug: tenant.slug }}
           competencia={mesAtual}
           onClose={() => setLancando(false)}
-          onSalvo={carregar}
+          onSalvo={cobrancaAlterada}
         />
       )}
     </div>
@@ -694,7 +707,7 @@ export default function TenantDetailPage() {
             perfil talvez nem possa fazer. */}
         {abaAtiva === 'staff'    && <StaffTab tenantId={tenantId} podeRedefinirSenha={podeGerenciar} />}
         {abaAtiva === 'clientes' && <ClientesTab tenantId={tenantId} />}
-        {abaAtiva === 'cobrancas' && <CobrancasTab tenant={tenant} />}
+        {abaAtiva === 'cobrancas' && <CobrancasTab tenant={tenant} onTenantAlterado={fetchTenant} />}
         {abaAtiva === 'logs'     && <LogsTab tenantId={tenantId} />}
         {abaAtiva === 'suporte'  && <SuporteTab tenantId={tenantId} />}
         {abaAtiva === 'uso'      && <UsoTab tenantId={tenantId} />}

@@ -75,6 +75,19 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
+
+    // Loja suspensa: no painel só a Assinatura responde. Qualquer outra tela
+    // (link salvo, favorito, a própria dashboard depois do login) leva o dono
+    // para lá, em vez de encher a tela de erros sem dizer o motivo.
+    if (error.response?.status === 403
+        && error.response?.data?.errorCode === 'tenant_suspended'
+        && typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/admin')
+        && !window.location.pathname.startsWith('/admin/assinatura')) {
+      window.location.href = '/admin/assinatura'
+      return Promise.reject(error)
+    }
+
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
@@ -1159,8 +1172,12 @@ export const leadsApi = {
 // ── Criação de loja pelo próprio lojista (site institucional) ────────────────
 
 export interface SolicitarLojaRequest {
-  nomeResponsavel: string; email: string; nomeLoja: string; slug: string; senha: string
+  // Sem senha: ela só é escolhida na confirmação, por quem abriu o e-mail
+  // (ver TenantSignupService no backend).
+  nomeResponsavel: string; email: string; nomeLoja: string; slug: string
   whatsApp?: string; plano?: string
+  /** CPF ou CNPJ de cobrança, opcional — vai para a fatura quando o teste acabar. */
+  documento?: string
   privacyNoticeAcknowledged: boolean; privacyNoticeVersion: string
 }
 
@@ -1173,8 +1190,10 @@ export const signupApi = {
     api.get<DisponibilidadeSlugDto>('/api/signup/slug', { params: { slug } }),
   solicitar: (req: SolicitarLojaRequest) =>
     api.post<{ message: string }>('/api/signup', req),
-  confirmar: (token: string) =>
-    api.post<{ slug: string; ticket: string }>('/api/signup/confirmar', { token }),
+  verificarLink: (token: string) =>
+    api.post<{ slug: string; nomeLoja: string }>('/api/signup/confirmar/verificar', { token }),
+  confirmar: (token: string, senha: string) =>
+    api.post<{ slug: string; ticket: string }>('/api/signup/confirmar', { token, senha }),
 }
 
 // ── Prospecção (busca de possíveis clientes — painel da plataforma) ───────────
@@ -1238,6 +1257,82 @@ export interface TenantChargeDto {
   emitidaNoGateway: boolean
   /** Link da fatura no gateway, para mandar ao lojista. */
   linkPagamento: string | null
+  /** Nasceu das condições comerciais e acompanha renegociação enquanto está em
+   *  aberto. False = lançada ou editada à mão. */
+  automatica: boolean
+  valorBruto: number | null
+  desconto: number
+  descricaoDesconto: string | null
+  parcela: number | null
+  totalParcelas: number | null
+}
+
+export type TipoDesconto = 'Percentual' | 'ValorFixo'
+
+export interface DescontoDto {
+  id: string
+  descricao: string
+  tipo: TipoDesconto
+  valor: number
+  competenciaInicial: string
+  /** Última competência, inclusive. Null = sem fim. */
+  competenciaFinal: string | null
+  situacao: 'Vigente' | 'Futuro' | 'Encerrado'
+  criadoPor: string | null
+  criadoEm: string
+}
+
+export interface PreviaItemDto {
+  tipo: 'Mensalidade' | 'Implantacao'
+  descricao: string
+  valorBruto: number | null
+  desconto: number
+  descricaoDesconto: string | null
+  valor: number
+  vencimento: string
+  situacao: 'Prevista' | 'SemCobranca' | 'EmAberto' | 'Emitida' | 'Paga'
+  manual: boolean
+}
+
+export interface CondicoesComerciaisDto {
+  tenantId: string
+  mensalidade: number
+  inicioCobranca: string | null
+  /** Null = o dia de inicioCobranca. */
+  diaVencimento: number | null
+  implantacao: {
+    valor: number
+    parcelas: number
+    primeiroVencimento: string | null
+    valorPago: number
+    parcelasPagas: number
+    lancadaManualmente: boolean
+  }
+  descontos: DescontoDto[]
+  previa: { competencia: string; itens: PreviaItemDto[]; total: number }[]
+}
+
+export interface AlteracaoCondicoesResultDto {
+  condicoes: CondicoesComerciaisDto
+  cobrancas: { criadas: number; atualizadas: number; removidas: number; pendencias: string[] }
+}
+
+export interface AtualizarCondicoesRequest {
+  mensalidade: number
+  inicioCobranca: string | null
+  diaVencimento: number | null
+  implantacaoValor: number
+  implantacaoParcelas: number
+  implantacaoPrimeiroVencimento: string | null
+}
+
+export interface SalvarDescontoRequest {
+  descricao: string
+  tipo: TipoDesconto
+  valor: number
+  /** "AAAA-MM-01" — o backend normaliza qualquer dia do mês. */
+  competenciaInicial: string
+  competenciaFinal: string | null
 }
 
 export interface BillingResumoDto {
@@ -1298,6 +1393,18 @@ export const platformBillingApi = {
     api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}`, body),
   excluirCobranca: (id: string) =>
     api.delete<void>(`/api/platform/billing/cobrancas/${id}`),
+  // Condições comerciais: o combinado com a loja. Toda escrita já aplica o
+  // resultado às cobranças em aberto e diz o que mudou nelas.
+  condicoes: (tenantId: string) =>
+    api.get<CondicoesComerciaisDto>(`/api/platform/billing/tenants/${tenantId}/condicoes`),
+  salvarCondicoes: (tenantId: string, body: AtualizarCondicoesRequest) =>
+    api.put<AlteracaoCondicoesResultDto>(`/api/platform/billing/tenants/${tenantId}/condicoes`, body),
+  criarDesconto: (tenantId: string, body: SalvarDescontoRequest) =>
+    api.post<AlteracaoCondicoesResultDto>(`/api/platform/billing/tenants/${tenantId}/descontos`, body),
+  atualizarDesconto: (tenantId: string, descontoId: string, body: SalvarDescontoRequest) =>
+    api.put<AlteracaoCondicoesResultDto>(`/api/platform/billing/tenants/${tenantId}/descontos/${descontoId}`, body),
+  excluirDesconto: (tenantId: string, descontoId: string) =>
+    api.delete<AlteracaoCondicoesResultDto>(`/api/platform/billing/tenants/${tenantId}/descontos/${descontoId}`),
 }
 
 export interface ProspectingCampaignRunDto {
@@ -2725,6 +2832,10 @@ export interface FaturaDto {
   pagoEm?: string | null
   vencida: boolean
   linkDePagamento?: string | null
+  desconto: number
+  descricaoDesconto?: string | null
+  parcela?: number | null
+  totalParcelas?: number | null
 }
 
 export interface AssinaturaDto {

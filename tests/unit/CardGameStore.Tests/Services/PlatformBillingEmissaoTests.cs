@@ -147,6 +147,9 @@ public class PlatformBillingEmissaoTests
             return new CobrancaGatewayResult($"pay_{charge.Id:N}", $"https://sandbox.asaas.test/i/{charge.Id:N}");
         }
 
+        public Task CancelarCobrancaAsync(string externalChargeId, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
         public bool ValidarAutenticacao(string? tokenRecebido) => true;
 
         public GatewayWebhookNotification? InterpretarWebhook(JsonElement payload) => null;

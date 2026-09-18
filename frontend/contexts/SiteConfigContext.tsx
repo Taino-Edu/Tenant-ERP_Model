@@ -44,6 +44,9 @@ export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
 interface SiteConfigContextValue {
   site:    SiteConfigDto
   loading: boolean
+  /** A API respondeu que a loja está suspensa. O login e o painel usam isto
+   *  para levar o dono direto à Assinatura, a única tela que ainda responde. */
+  suspensa: boolean
 }
 
 const SiteConfigContext = createContext<SiteConfigContextValue | null>(null)
@@ -51,6 +54,7 @@ const SiteConfigContext = createContext<SiteConfigContextValue | null>(null)
 export function SiteConfigProvider({ children }: { children: ReactNode }) {
   const [site,    setSite]    = useState<SiteConfigDto>(DEFAULT_SITE_CONFIG)
   const [loading, setLoading] = useState(true)
+  const [suspensa, setSuspensa] = useState(false)
 
   useEffect(() => {
     siteConfigApi.get()
@@ -62,11 +66,14 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
         // genérica e vazia, que confunde o visitante), redireciona pra uma tela
         // clara. Não mexe no painel /admin (o lojista já sabe do status por
         // /plataforma, e mandar ele pra uma tela de cliente seria confuso).
-        const status = (err as { response?: { status?: number } })?.response?.status
+        const response = (err as { response?: { status?: number; data?: { errorCode?: string } } })?.response
+        const status = response?.status
+        if (status === 403 && response?.data?.errorCode === 'tenant_suspended') setSuspensa(true)
         if (typeof window !== 'undefined' && (status === 403 || status === 404)) {
           const destino = status === 404 ? '/loja-nao-encontrada' : '/loja-suspensa'
           const path = window.location.pathname
-          if (!path.startsWith('/admin') && path !== destino) {
+          // /login fica: é por ele que o dono entra para pagar a loja suspensa.
+          if (!path.startsWith('/admin') && !(status === 403 && path === '/login') && path !== destino) {
             window.location.href = destino
           }
         }
@@ -75,7 +82,7 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <SiteConfigContext.Provider value={{ site, loading }}>
+    <SiteConfigContext.Provider value={{ site, loading, suspensa }}>
       {children}
     </SiteConfigContext.Provider>
   )

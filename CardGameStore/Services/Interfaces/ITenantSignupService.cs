@@ -13,8 +13,23 @@ public interface ITenantSignupService
 
     Task<SolicitarLojaResultado> SolicitarAsync(SolicitarLojaRequest request, CancellationToken ct = default);
 
-    Task<ConfirmarLojaResultado> ConfirmarAsync(string? token, CancellationToken ct = default);
+    /// <summary>Só lê: diz se o link ainda serve, para a página não pedir a senha
+    /// de quem já não vai conseguir criar a loja. Não reserva nem cria nada.</summary>
+    Task<LinkDeLojaResultado> VerificarLinkAsync(string? token, CancellationToken ct = default);
+
+    Task<ConfirmarLojaResultado> ConfirmarAsync(string? token, string? senha, CancellationToken ct = default);
 }
+
+public enum LinkDeLojaStatus
+{
+    Valido,
+    TokenInvalido,
+    Expirado,
+    JaConfirmada,
+}
+
+public sealed record LinkDeLojaResultado(
+    LinkDeLojaStatus Status, string? Slug = null, string? NomeLoja = null);
 
 public enum SolicitacaoStatus
 {
@@ -34,6 +49,7 @@ public enum ConfirmacaoStatus
     Criada,
     TokenInvalido,
     Expirado,
+    SenhaInvalida,
     JaConfirmada,
     EmAndamento,
     SlugIndisponivel,

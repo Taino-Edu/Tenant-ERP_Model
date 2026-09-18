@@ -9,15 +9,21 @@
 // O fluxo tem duas etapas, e a divisão é o que torna seguro deixar qualquer um
 // criar uma loja sem login:
 //
-//   1. Solicitar — valida endereço e plano, guarda o pedido (só hashes) e manda
-//      o link. Não cria schema, não roda migration, não gasta nada: um e-mail
-//      digitado errado, ou um script disparando pedidos, gera no máximo linhas
-//      que expiram em 24 horas.
-//   2. Confirmar — quem clicou no link provou que lê aquela caixa de entrada.
-//      Só então o provisionamento de sempre roda (o mesmo do painel da
-//      plataforma, com os 15 dias grátis de ApplyCommercialTerms), e a resposta
-//      traz um LoginRedirectTicket para a pessoa cair logada no subdomínio da
-//      loja nova.
+//   1. Solicitar — valida endereço e plano, guarda o pedido (token só em hash) e
+//      manda o link. Não cria schema, não roda migration, não gasta nada: um
+//      e-mail digitado errado, ou um script disparando pedidos, gera no máximo
+//      linhas que expiram em 24 horas.
+//   2. Confirmar — quem clicou no link provou que lê aquela caixa de entrada, e
+//      é só aí que a senha do admin é escolhida. Então o provisionamento de
+//      sempre roda (o mesmo do painel da plataforma, com os 15 dias grátis de
+//      ApplyCommercialTerms), e a resposta traz um LoginRedirectTicket para a
+//      pessoa cair logada no subdomínio da loja nova.
+//
+// A senha NÃO pode ir na etapa 1. O pedido é anônimo: com ela ali, quem soubesse
+// o e-mail de um lojista pediria a loja em nome dele com uma senha própria. O
+// lojista recebe um e-mail legítimo, clica, cai logado sem nunca digitar senha e
+// começa a usar a loja; o autor do pedido entra depois com a senha que escolheu.
+// Pedir a senha na confirmação amarra a senha a quem provou ser dono do e-mail.
 //
 // Os tetos diários (Signup:MaxSolicitacoesPorDia e Signup:MaxLojasPorDia) são
 // disjuntor, não regra comercial: cada loja confirmada é um schema com ~60
@@ -162,8 +168,10 @@ public sealed class TenantSignupService : ITenantSignupService
             StoreName    = request.NomeLoja.Trim(),
             Slug         = slug,
             PlanName     = plano,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Senha),
             Phone        = string.IsNullOrWhiteSpace(request.WhatsApp) ? null : request.WhatsApp.Trim(),
+            BillingDocument = string.IsNullOrWhiteSpace(request.Documento)
+                ? null
+                : CardGameStore.Validation.CnpjValidAttribute.SomenteDigitos(request.Documento),
             PrivacyNoticeVersion        = request.PrivacyNoticeVersion.Trim(),
             PrivacyNoticeAcknowledgedAt = agora,
             CreatedAt    = agora,
@@ -204,14 +212,23 @@ public sealed class TenantSignupService : ITenantSignupService
 
     // ── Etapa 2: confirmação ─────────────────────────────────────────────────
 
-    public async Task<ConfirmarLojaResultado> ConfirmarAsync(string? token, CancellationToken ct = default)
+    public async Task<LinkDeLojaResultado> VerificarLinkAsync(string? token, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(token))
-            return new(ConfirmacaoStatus.TokenInvalido);
+        var signup = await PedidoDoTokenAsync(token, ct);
 
-        var hash = HashDoToken(token.Trim());
-        var signup = await _catalog.TenantSignups.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
+        if (signup is null)
+            return new(LinkDeLojaStatus.TokenInvalido);
+        if (signup.ConfirmedAt is not null)
+            return new(LinkDeLojaStatus.JaConfirmada, signup.Slug);
+        if (signup.ExpiresAt < DateTime.UtcNow)
+            return new(LinkDeLojaStatus.Expirado);
+
+        return new(LinkDeLojaStatus.Valido, signup.Slug, signup.StoreName);
+    }
+
+    public async Task<ConfirmarLojaResultado> ConfirmarAsync(string? token, string? senha, CancellationToken ct = default)
+    {
+        var signup = await PedidoDoTokenAsync(token, ct);
 
         if (signup is null)
             return new(ConfirmacaoStatus.TokenInvalido);
@@ -222,6 +239,12 @@ public sealed class TenantSignupService : ITenantSignupService
         if (signup.ExpiresAt < agora)
             return new(ConfirmacaoStatus.Expirado);
 
+        // Conferida aqui também, e não só no DTO: é a senha do admin de uma loja,
+        // e este serviço não pode depender de quem o chama ter validado a entrada.
+        if (senha is null || senha.Length < TenantSignupSenha.Minimo || senha.Length > TenantSignupSenha.Maximo)
+            return new(ConfirmacaoStatus.SenhaInvalida, signup.Slug,
+                Mensagem: $"A senha precisa ter de {TenantSignupSenha.Minimo} a {TenantSignupSenha.Maximo} caracteres.");
+
         if (await _catalog.TenantSignups.CountAsync(s => s.ConfirmedAt > agora.AddDays(-1), ct) >= MaxLojasPorDia)
         {
             _logger.LogWarning("Teto diário de lojas criadas pelo site atingido ({Max}). Confirmação de '{Slug}' adiada.",
@@ -229,6 +252,10 @@ public sealed class TenantSignupService : ITenantSignupService
             return new(ConfirmacaoStatus.LimiteDiario, signup.Slug,
                 Mensagem: "Muitas lojas foram criadas hoje. Seu cadastro continua guardado: tente de novo amanhã pelo mesmo link.");
         }
+
+        // Antes da reserva: o BCrypt é propositalmente lento, e a reserva deve
+        // durar só o provisionamento.
+        var hashDaSenha = BCrypt.Net.BCrypt.HashPassword(senha);
 
         var limiteDaReserva = agora - ReservaDaConfirmacao;
         var reservou = await _catalog.TenantSignups
@@ -253,8 +280,9 @@ public sealed class TenantSignupService : ITenantSignupService
                 kind: TenantKind.Native, isPubliclyListed: false,
                 owner: new TenantOwnerProfile(
                     adminId, signup.OwnerName,
-                    signup.PasswordHash ?? throw new InvalidOperationException("Pedido sem senha antes da confirmação."),
-                    signup.StoreName));
+                    hashDaSenha,
+                    signup.StoreName,
+                    signup.BillingDocument));
         }
         catch (Exception ex)
         {
@@ -276,7 +304,9 @@ public sealed class TenantSignupService : ITenantSignupService
             .ExecuteUpdateAsync(set => set
                 .SetProperty(s => s.ConfirmedAt, DateTime.UtcNow)
                 .SetProperty(s => s.TenantId, tenant.Id)
-                .SetProperty(s => s.PasswordHash, (string?)null), CancellationToken.None);
+                // O documento já está no Tenant; a cópia no pedido seria dado
+                // pessoal guardado duas vezes sem finalidade.
+                .SetProperty(s => s.BillingDocument, (string?)null), CancellationToken.None);
 
         var ticket = new LoginRedirectTicket
         {
@@ -297,6 +327,15 @@ public sealed class TenantSignupService : ITenantSignupService
     }
 
     // ── Apoio ────────────────────────────────────────────────────────────────
+
+    private async Task<TenantSignup?> PedidoDoTokenAsync(string? token, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return null;
+
+        var hash = HashDoToken(token.Trim());
+        return await _catalog.TenantSignups.AsNoTracking().FirstOrDefaultAsync(s => s.TokenHash == hash, ct);
+    }
 
     private static string NormalizarSlug(string? slug) => (slug ?? string.Empty).Trim().ToLowerInvariant();
 

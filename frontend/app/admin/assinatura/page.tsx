@@ -15,10 +15,16 @@ import toast from 'react-hot-toast'
 const dinheiro = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-const data = (iso: string) => new Date(iso).toLocaleDateString('pt-BR')
+// Pelas partes da string, e não por new Date(): as datas de cobrança chegam
+// como meia-noite UTC, e no fuso do Brasil o toLocaleDateString mostrava o dia
+// anterior — e a competência de agosto (dia 1) aparecia como julho.
+const data = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
 
-const competencia = (iso: string) =>
-  new Date(iso).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })
+const competencia = (iso: string) => iso.slice(0, 7).split('-').reverse().join('/')
+
+/** De quanto em quanto tempo a tela confere se o pagamento da loja suspensa já
+ *  foi confirmado. O Pix chega ao webhook em segundos. */
+const INTERVALO_REATIVACAO_MS = 15_000
 
 export default function AssinaturaPage() {
   const [dados, setDados]       = useState<AssinaturaDto | null>(null)
@@ -42,13 +48,34 @@ export default function AssinaturaPage() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Suspensa, esperando o pagamento: confere a situação sozinha e, quando a
+  // loja volta, recarrega o painel inteiro. Recarregar (e não só navegar) é o
+  // que refaz a leitura da configuração da loja, que ficou marcada como suspensa.
+  const suspensa = dados?.situacao === 'Suspensa'
+  useEffect(() => {
+    if (!suspensa) return
+    const id = setInterval(async () => {
+      try {
+        const { data: res } = await assinaturaApi.obter()
+        if (res.situacao !== 'Suspensa') window.location.href = '/admin/dashboard'
+        else setDados(res)
+      } catch {
+        // Falha pontual de rede: a próxima volta tenta de novo.
+      }
+    }, INTERVALO_REATIVACAO_MS)
+    return () => clearInterval(id)
+  }, [suspensa])
+
   const salvar = async (e: React.FormEvent) => {
     e.preventDefault()
     setSalvando(true)
     try {
       const { data: res } = await assinaturaApi.salvarFaturamento({ documento, email })
       setDados(res)
-      toast.success('Dados de cobrança salvos')
+      // O backend emite a fatura em aberto logo depois de salvar.
+      toast.success(res.faturas.some(f => !f.pagoEm && f.linkDePagamento)
+        ? 'Dados salvos. A fatura já pode ser paga pela lista abaixo.'
+        : 'Dados de cobrança salvos')
     } catch (err) {
       // O backend valida o dígito verificador do CPF/CNPJ e devolve a mensagem
       // pronta — é aqui que o lojista descobre o erro, e não dias depois numa
@@ -64,8 +91,6 @@ export default function AssinaturaPage() {
   }
 
   if (!dados) return null
-
-  const suspensa = dados.situacao === 'Suspensa'
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-3xl">
@@ -180,9 +205,20 @@ export default function AssinaturaPage() {
                 {dados.faturas.map(f => (
                   <tr key={f.id}>
                     <td className="py-3 text-gray-300">
-                      {f.tipo === 'Implantacao' ? 'Implantação' : competencia(f.competencia)}
+                      {f.tipo === 'Implantacao'
+                        ? f.parcela && (f.totalParcelas ?? 0) > 1
+                          ? `Implantação ${f.parcela}/${f.totalParcelas}`
+                          : 'Implantação'
+                        : competencia(f.competencia)}
                     </td>
-                    <td className="py-3 text-white font-medium">{dinheiro(f.valor)}</td>
+                    <td className="py-3 text-white font-medium">
+                      {dinheiro(f.valor)}
+                      {f.desconto > 0 && (
+                        <span className="block text-xs font-normal text-emerald-300">
+                          −{dinheiro(f.desconto)}{f.descricaoDesconto ? ` · ${f.descricaoDesconto}` : ''}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 text-gray-400">{data(f.vencimento)}</td>
                     <td className="py-3">
                       {f.pagoEm ? (

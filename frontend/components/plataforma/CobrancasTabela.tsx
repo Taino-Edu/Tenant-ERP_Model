@@ -33,7 +33,10 @@ export function dataCurta(iso: string): string {
 
 const mesAno = (iso: string) => iso.slice(0, 7).split('-').reverse().join('/')
 
-const rotuloTipo = (c: TenantChargeDto) => c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade'
+const rotuloTipo = (c: TenantChargeDto) => {
+  if (c.tipo !== 'Implantacao') return 'Mensalidade'
+  return c.parcela && (c.totalParcelas ?? 0) > 1 ? `Implantação ${c.parcela}/${c.totalParcelas}` : 'Implantação'
+}
 
 export default function CobrancasTabela({
   cobrancas, podeLancar, mostrarLoja = true, onAlterado, className,
@@ -128,7 +131,18 @@ export default function CobrancasTabela({
         columns={[
           primeiraColuna,
           { key: 'valor', header: 'Valor', align: 'right', mobile: 'trailing',
-            cell: c => <span className="font-semibold tabular-nums text-white">{brl(c.valor)}</span> },
+            cell: c => (
+              <>
+                <span className="font-semibold tabular-nums text-white">{brl(c.valor)}</span>
+                {/* O desconto aparece junto do valor: sem isso, R$ 180 numa
+                    loja de R$ 200 parece erro de lançamento. */}
+                {c.desconto > 0 && (
+                  <p className="text-[11px] text-gray-500" title={c.descricaoDesconto ?? undefined}>
+                    −{brl(c.desconto)}{c.descricaoDesconto ? ` · ${c.descricaoDesconto}` : ''}
+                  </p>
+                )}
+              </>
+            ) },
           { key: 'tipo', header: 'Tipo', mobile: 'meta', className: 'text-gray-300', cell: rotuloTipo },
           { key: 'vencimento', header: 'Vencimento', mobile: 'meta', className: 'text-gray-300',
             cell: c => <>vence {dataCurta(c.vencimento)}</> },
@@ -155,8 +169,8 @@ export default function CobrancasTabela({
               <strong>{excluindo.tenantNome}</strong>? A cobrança some do histórico da loja
               e do faturado do mês. Isso não pode ser desfeito.
               {excluindo.emitidaNoGateway && (
-                <> Ela <strong>já foi emitida no Asaas</strong>: cancele a fatura lá também,
-                senão o lojista continua podendo pagá-la.</>
+                <> Ela <strong>já foi emitida no Asaas</strong>: a fatura é cancelada lá
+                antes, e se o Asaas recusar (já paga, por exemplo) nada é excluído.</>
               )}
             </>
           }

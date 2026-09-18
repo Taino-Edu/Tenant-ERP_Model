@@ -8,8 +8,9 @@ import UsageTracker from '@/components/admin/UsageTracker'
 import AdminAreaSubnav from '@/components/admin/AdminAreaSubnav'
 import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { api } from '@/lib/api'
+import { usePathname, useRouter } from 'next/navigation'
+import { LogOut } from 'lucide-react'
+import { api, authApi } from '@/lib/api'
 import { saveAuth, clearAuth, getImpersonatingOwnerName, getRole } from '@/lib/auth'
 import { ADMIN_PERMISSIONS_EVENT, useAdminPermissions } from '@/hooks/useAdminPermissions'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
@@ -24,7 +25,8 @@ const REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { site } = useSiteConfig()
+  const pathname = usePathname()
+  const { site, suspensa } = useSiteConfig()
   const [impersonatingOwner, setImpersonatingOwner] = useState<string | null>(null)
   const { isAdmin, can } = useAdminPermissions()
   const canUseAi = isAdmin || can('ia')
@@ -73,6 +75,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => clearInterval(id)
   }, [])
 
+  // Loja suspensa: a Assinatura é a única tela que a API ainda responde.
+  useEffect(() => {
+    if (suspensa && !pathname.startsWith('/admin/assinatura')) router.replace('/admin/assinatura')
+  }, [suspensa, pathname, router])
+
+  async function sair() {
+    try { await authApi.logout() } catch {}
+    clearAuth()
+    router.push('/login')
+  }
+
   function sairDaSimulacao() {
     // Sessão de impersonação não tem refresh token — sair é só limpar os
     // cookies locais e voltar pro login, SEM chamar /api/auth/logout (isso
@@ -80,6 +93,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     // admin real da loja).
     clearAuth()
     router.push('/login')
+  }
+
+  // Casca mínima enquanto a loja está suspensa: sem menu, atalhos, IA nem
+  // rastreio de uso, que só disparariam chamadas fadadas ao 403. Fica a
+  // Assinatura e um jeito de sair.
+  if (suspensa) {
+    return (
+      <div className="admin-shell min-h-screen bg-surface-900">
+        <Toaster position="top-right" containerClassName="admin-toaster" />
+        <header className="flex items-center justify-between border-b border-surface-600 px-4 py-3">
+          <span className="font-semibold text-white">{site.siteName}</span>
+          <button type="button" onClick={sair} className="btn-secondary text-sm">
+            <LogOut className="h-4 w-4" /> Sair
+          </button>
+        </header>
+        <main className="mx-auto max-w-3xl">{children}</main>
+      </div>
+    )
   }
 
   return (

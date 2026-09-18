@@ -11,7 +11,7 @@ import Logo from '@/components/Logo'
 
 export default function LoginPage() {
   const router  = useRouter()
-  const { site, loading: siteLoading } = useSiteConfig()
+  const { site, loading: siteLoading, suspensa } = useSiteConfig()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -29,6 +29,21 @@ export default function LoginPage() {
     setMatches(null)
     try {
       const { data } = await authApi.login(email, password)
+
+      // Loja suspensa: só o admin tem o que fazer aqui (ver a fatura e pagar).
+      // Operador e cliente entrariam num painel em que nada responde; melhor
+      // dizer o motivo e não abrir a sessão.
+      if (suspensa) {
+        if (data.role !== 'Admin') {
+          try { await authApi.logout() } catch {}
+          toast.error('Esta loja está suspensa por falta de pagamento. O administrador da loja precisa regularizar a assinatura.', { duration: 7000 })
+          return
+        }
+        saveAuth(data)
+        router.push('/admin/assinatura')
+        return
+      }
+
       saveAuth(data)
       toast.success(`Bem-vindo, ${data.userName}!`)
       router.push(
@@ -117,6 +132,13 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-white">{site.siteName}</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>
         </div>
+
+        {suspensa && (
+          <p role="status" className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+            Esta loja está suspensa por mensalidade em atraso. Entre como administrador para ver a
+            fatura e pagar — a loja volta sozinha assim que o pagamento é confirmado.
+          </p>
+        )}
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card space-y-5">

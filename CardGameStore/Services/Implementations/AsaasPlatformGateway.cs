@@ -108,12 +108,19 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
 
         using var client = CreateClient();
 
+        // O Asaas recusa vencimento no passado. Cobrança já vencida que só agora
+        // vai ao gateway (a loja informou o CNPJ depois do prazo, ou a fatura foi
+        // reemitida numa renegociação) sai vencendo hoje. O DueDate local não
+        // muda: é por ele que a régua conta o atraso, e o atraso é real.
+        var hoje = DateTime.UtcNow.Date;
+        var vencimento = charge.DueDate.Date < hoje ? hoje : charge.DueDate.Date;
+
         var body = new
         {
             customer          = tenant.BillingCustomerId,
             billingType       = BillingType,
             value             = charge.Amount,
-            dueDate           = charge.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            dueDate           = vencimento.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             description       = DescricaoDaCobranca(charge, tenant),
             // Amarra a cobrança do Asaas à nossa linha. O webhook não usa isso
             // (busca por ExternalChargeId), mas é o que salva a conciliação
@@ -144,6 +151,27 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
         return new CobrancaGatewayResult(
             ExternalId: externalId,
             PaymentUrl: LerTexto(raiz, "invoiceUrl") ?? LerTexto(raiz, "bankSlipUrl"));
+    }
+
+    public async Task CancelarCobrancaAsync(string externalChargeId, CancellationToken ct = default)
+    {
+        if (!IsConfigured)
+            throw new InvalidOperationException("Asaas não configurado (Billing:Asaas:ApiKey ausente).");
+
+        using var client = CreateClient();
+        using var response = await client.DeleteAsync($"payments/{Uri.EscapeDataString(externalChargeId)}", ct);
+
+        // Já removida lá (por alguém no painel do Asaas, ou numa tentativa
+        // anterior cuja resposta se perdeu): o estado desejado já é o atual.
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return;
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var conteudo = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("Asaas recusou o cancelamento da cobrança {ExternalId}: {Status} {Corpo}",
+                externalChargeId, (int)response.StatusCode, conteudo);
+            throw new InvalidOperationException($"Asaas recusou o cancelamento ({(int)response.StatusCode}).");
+        }
     }
 
     private async Task<string> CriarClienteAsync(HttpClient client, Tenant tenant, CancellationToken ct)
@@ -184,9 +212,22 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
     private static string DescricaoDaCobranca(TenantCharge charge, Tenant tenant)
     {
         var loja = tenant.DisplayName ?? tenant.Slug;
-        return charge.Kind == TenantChargeKind.Implantacao
-            ? $"Implantação — {loja}"
-            : $"Mensalidade {charge.ReferenceMonth:MM/yyyy} — {loja}";
+
+        if (charge.Kind == TenantChargeKind.Implantacao)
+        {
+            var parcela = charge.InstallmentNumber is { } numero && charge.InstallmentCount is > 1
+                ? $" {numero}/{charge.InstallmentCount}"
+                : string.Empty;
+            return $"Implantação{parcela} — {loja}";
+        }
+
+        // O desconto vai escrito na fatura: o lojista que negociou "10% do
+        // parceiro" precisa enxergar que ele foi aplicado, senão o valor menor
+        // parece erro e vira chamado.
+        var desconto = string.IsNullOrWhiteSpace(charge.DiscountSummary)
+            ? string.Empty
+            : $" (desconto: {charge.DiscountSummary})";
+        return $"Mensalidade {charge.ReferenceMonth:MM/yyyy} — {loja}{desconto}";
     }
 
     // ── Webhook ──────────────────────────────────────────────────────────────

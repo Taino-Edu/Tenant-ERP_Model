@@ -20,6 +20,7 @@
 
 using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Interfaces;
 using CardGameStore.Validation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -36,15 +37,18 @@ public class AssinaturaController : ControllerBase
     private readonly CatalogDbContext _catalog;
     private readonly ITenantContext _tenant;
     private readonly ILogger<AssinaturaController> _logger;
+    private readonly IPlatformBillingService? _billing;
 
     public AssinaturaController(
         CatalogDbContext catalog,
         ITenantContext tenant,
-        ILogger<AssinaturaController> logger)
+        ILogger<AssinaturaController> logger,
+        IPlatformBillingService? billing = null)
     {
         _catalog = catalog;
         _tenant  = tenant;
         _logger  = logger;
+        _billing = billing;
     }
 
     [HttpGet]
@@ -71,6 +75,10 @@ public class AssinaturaController : ControllerBase
                 PagoEm          = c.PaidAt,
                 Vencida         = c.PaidAt == null && c.DueDate < hoje,
                 LinkDePagamento = c.PaymentUrl,
+                Desconto          = c.DiscountAmount,
+                DescricaoDesconto = c.DiscountSummary,
+                Parcela           = c.InstallmentNumber,
+                TotalParcelas     = c.InstallmentCount,
             })
             .ToListAsync(ct);
 
@@ -117,6 +125,25 @@ public class AssinaturaController : ControllerBase
         tenant.BillingEmail = request.Email.Trim();
 
         await _catalog.SaveChangesAsync(ct);
+
+        // A fatura sai agora, e não na próxima rodada do job. Quem chega aqui
+        // quase sempre está com a loja suspensa ou perto disso, esperando o link
+        // pra pagar — 12 horas de espera seriam 12 horas a mais fora do ar.
+        if (_billing is not null)
+        {
+            try
+            {
+                var emissao = await _billing.EmitirCobrancasPendentesDaLojaAsync(tenant.Id, CancellationToken.None);
+                foreach (var pendencia in emissao.Pendencias)
+                    _logger.LogWarning("Fatura do tenant {Slug} não emitida após atualizar faturamento: {Pendencia}",
+                        tenant.Slug, pendencia);
+            }
+            catch (Exception ex)
+            {
+                // Os dados já estão salvos; a rodada automática tenta de novo.
+                _logger.LogError(ex, "Falha ao emitir as faturas do tenant {Slug} após atualizar faturamento", tenant.Slug);
+            }
+        }
 
         return await Obter(ct);
     }

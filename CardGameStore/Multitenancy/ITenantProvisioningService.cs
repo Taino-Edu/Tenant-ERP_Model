@@ -36,4 +36,7 @@ public interface ITenantProvisioningService
 /// <remarks>O WhatsApp informado no site fica só no TenantSignup, e não no User do admin, de
 /// propósito: o quick-login da mesa procura cadastro por WhatsApp, e o dono testando a
 /// própria mesa esbarraria na conta de admin em vez de virar cliente.</remarks>
-public sealed record TenantOwnerProfile(Guid UserId, string Name, string PasswordHash, string StoreName);
+/// <param name="BillingDocument">CPF/CNPJ de cobrança informado no cadastro, só dígitos.
+/// Opcional — sem ele a loja informa depois em /admin/assinatura.</param>
+public sealed record TenantOwnerProfile(
+    Guid UserId, string Name, string PasswordHash, string StoreName, string? BillingDocument = null);

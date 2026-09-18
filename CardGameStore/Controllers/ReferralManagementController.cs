@@ -220,18 +220,11 @@ public class ReferralManagementController : ControllerBase
         referral.Notes = Clean(request.Notes);
         referral.UpdatedAt = DateTime.UtcNow;
 
-        if (tenant.SetupFee > 0 && !await _catalog.TenantCharges.AnyAsync(c =>
-                c.TenantId == tenant.Id && c.Kind == TenantChargeKind.Implantacao))
-        {
-            var created = tenant.CreatedAt.ToUniversalTime();
-            _catalog.TenantCharges.Add(new TenantCharge
-            {
-                TenantId = tenant.Id, Kind = TenantChargeKind.Implantacao, Amount = tenant.SetupFee,
-                ReferenceMonth = new DateTime(created.Year, created.Month, 1, 0, 0, 0, DateTimeKind.Utc),
-                DueDate = created.Date,
-                Notes = "Implantação gerada ao registrar a indicação comercial.",
-            });
-        }
+        // A implantação sai pelas condições comerciais da loja (ver
+        // PlatformController, conversão do CRM): aqui só se garante a data.
+        if (tenant.SetupFee > 0 && tenant.SetupFirstDueDate is null)
+            tenant.SetupFirstDueDate = CardGameStore.Services.CondicoesComerciais
+                .PrimeiroVencimentoPadraoDaImplantacao(tenant, DateTime.UtcNow);
 
         await _catalog.SaveChangesAsync();
         await _commissions.SynchronizeReferralAsync(referral.Id);
