@@ -131,7 +131,10 @@ public sealed partial class IntegrationServicesController(
     [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<IActionResult> UploadFiscalCertificate(
-        [FromForm] IFormFile certificate, [FromForm] string password)
+        // IFormFile sem [FromForm], como em FiscalController e ContadorPortalController:
+        // o arquivo já vem do formulário por padrão, e o Swashbuckle recusa o atributo
+        // explícito em IFormFile — o /swagger/v1/swagger.json inteiro respondia 500.
+        IFormFile certificate, [FromForm] string password)
     {
         if (certificate is null || certificate.Length == 0)
             return BadRequest(new { Message = "Envie um certificado A1 no formato PFX/P12." });
