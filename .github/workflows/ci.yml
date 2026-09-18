@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          global-json-file: global.json
 
       - name: Restore
         run: dotnet restore softNerd.sln
@@ -284,8 +284,11 @@ jobs:
           sleep 20
           curl -fsS -o /dev/null "http://$HOST/" \
             && echo "Site respondendo 200 após o deploy."
-          curl -fsS -o /dev/null "https://dev-swagger.3esysten.com.br/swagger/index.html" \
-            && echo "Swagger público respondendo após o deploy."
+          # O JSON, não a página: o index.html do Swagger UI abre mesmo quando a
+          # geração do documento falha, e o swagger.json passou semanas em 500
+          # (IFormFile com [FromForm]) com este passo verde.
+          curl -fsS -o /dev/null "https://dev-swagger.3esysten.com.br/swagger/v1/swagger.json" \
+            && echo "Swagger público gerando o documento após o deploy."
           # A Cloudflare pode devolver um 522 transitório enquanto as conexões
           # com a origem são renovadas após o restart. Repetimos por até ~1 min,
           # mas ainda falhamos o job se a API realmente continuar indisponível.
