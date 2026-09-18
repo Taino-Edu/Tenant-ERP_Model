@@ -8,7 +8,11 @@
 # FLUXO SEGURO:
 #   1. Backup do banco ANTES de qualquer mudança (ponto de restauração).
 #   2. Taga as imagens atuais como :rollback.
-#   3. Checkout do commit aprovado + build + up -d (migrations rodam no boot).
+#   3. Checkout do commit aprovado + imagens do GHCR + up -d (migrations rodam
+#      no boot). As imagens são compiladas pelo GitHub Actions (job "images" do
+#      ci.yml) com a tag do próprio commit; aqui elas só são baixadas.
+#      Emergência (GHCR fora do ar): DEPLOY_BUILD_LOCAL=1 compila na VPS como
+#      antes.
 #   4. Health check em /health. Se a API não subir, reverte pras imagens
 #      :rollback automaticamente e aborta — o site volta pro estado anterior.
 #
@@ -95,9 +99,29 @@ git checkout --detach "$DEPLOY_SHA"
 cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
 cd "$COMPOSE_DIR"
-# CACHEBUST força o Docker a recompilar o Next.js
-DEPLOY_STAGE="build das imagens"
-$COMPOSE build --build-arg CACHEBUST="$(date +%s)"
+if [ "${DEPLOY_BUILD_LOCAL:-0}" = "1" ]; then
+    # CACHEBUST força o Docker a recompilar o Next.js
+    DEPLOY_STAGE="build local das imagens"
+    echo -e "${YELLOW}🔨 DEPLOY_BUILD_LOCAL=1: compilando as imagens na VPS...${NC}"
+    $COMPOSE build --build-arg CACHEBUST="$(date +%s)"
+else
+    # A imagem do commit exato, não a :main: se dois merges chegarem em
+    # sequência, cada deploy sobe o que a CI dele aprovou. O retag para o nome
+    # local mantém o resto do script (rollback, VAPID, compose) como era.
+    DEPLOY_STAGE="download das imagens do GHCR"
+    for par in "cardgamestore_api:tenant-erp-api" "cardgamestore_frontend:tenant-erp-frontend"; do
+        local_name="${par%%:*}"
+        remoto="ghcr.io/taino-edu/${par##*:}:${DEPLOY_SHA}"
+        if ! docker pull --quiet "$remoto" >/dev/null; then
+            echo -e "${RED}❌ Não foi possível baixar $remoto.${NC}" >&2
+            echo -e "${RED}   Confira se o job de imagens da CI terminou e se o pacote está público no GHCR.${NC}" >&2
+            echo -e "${RED}   Emergência: DEPLOY_BUILD_LOCAL=1 compila na VPS.${NC}" >&2
+            exit 1
+        fi
+        docker tag "$remoto" "$local_name:latest"
+    done
+    echo -e "${GREEN}✅ Imagens do commit ${DEPLOY_SHA:0:7} baixadas do GHCR.${NC}"
+fi
 
 # ── 3b. Backfill das chaves VAPID (push do navegador) ───────────────────────
 # Instalações criadas antes de o push existir no .env não têm estas chaves, e
