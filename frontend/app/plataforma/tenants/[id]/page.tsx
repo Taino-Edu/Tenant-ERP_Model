@@ -16,6 +16,7 @@ import SeverityBadge from '@/components/admin/SeverityBadge'
 import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
+import { ROOT_DOMAIN } from '@/lib/seo'
 
 function fmtDateTime(iso: string | null) {
   if (!iso) return '—'
@@ -359,8 +360,8 @@ function CustomDomainCard({ tenant, onSaved, podeEditar }: { tenant: TenantSumma
         <div className="flex items-center justify-between gap-3 mt-2">
           <p className="text-sm text-gray-300">
             {tenant.customDomain
-              ? <>Ativo em <span className="font-mono text-white">{tenant.customDomain}</span> (além de <span className="font-mono">{tenant.slug}.2esysten.com.br</span>)</>
-              : <>Nenhum — só <span className="font-mono">{tenant.slug}.2esysten.com.br</span> funciona hoje.</>}
+              ? <>Ativo em <span className="font-mono text-white">{tenant.customDomain}</span> (além de <span className="font-mono">{tenant.slug}.{ROOT_DOMAIN}</span>)</>
+              : <>Nenhum — só <span className="font-mono">{tenant.slug}.{ROOT_DOMAIN}</span> funciona hoje.</>}
           </p>
           {/* O domínio em si continua visível — só a edição depende de
               `tenants.manage`, que é o que PATCH /tenants/{id}/domain exige. */}
@@ -380,7 +381,7 @@ function CustomDomainCard({ tenant, onSaved, podeEditar }: { tenant: TenantSumma
             Não emitimos certificado TLS automaticamente. O lojista precisa colocar o domínio dele
             atrás da própria conta Cloudflare (grátis), modo <span className="font-medium">Flexible</span>,
             apontando (A/CNAME) pra <span className="font-mono">179.197.67.64</span> — mesmo esquema que
-            <span className="font-mono"> 2esysten.com.br</span> já usa.
+            <span className="font-mono"> {ROOT_DOMAIN}</span> já usa.
           </p>
           <div className="flex gap-2">
             <button onClick={() => setEditing(false)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
@@ -471,8 +472,7 @@ function IntegrationCredentialsCard({ tenant, podeEditar }: { tenant: TenantSumm
     toast.success(`${label} copiado.`)
   }
 
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN
-  const baseUrl = rootDomain ? `https://${tenant.slug}.${rootDomain}` : `https://${tenant.slug}.3esysten.com.br`
+  const baseUrl = `https://${tenant.slug}.${ROOT_DOMAIN}`
 
   return (
     <div className="card space-y-4">
