@@ -34,10 +34,11 @@ updates:
     groups:
       backend-minor-patch:
         update-types: [minor, patch]
-    # A solução tem alvo net8.0. As majors de EF Core, ASP.NET Core e Npgsql
-    # acompanham a major do runtime: EF Core 9 e 10 propostos aqui não são
-    # atualização, são migração de framework, e o build recusa antes disso.
-    # Quando o alvo passar para net9.0/net10.0, esta lista sai junto.
+    # A solução tem alvo net10.0 (LTS, suporte até novembro de 2028). As majors
+    # de EF Core, ASP.NET Core e Npgsql acompanham a major do runtime: a 11
+    # proposta aqui não é atualização, é migração de framework — e o .NET 11 é
+    # STS, com suporte mais curto que o 10. A próxima migração é para o 12 (LTS);
+    # quando ela acontecer, esta lista é revista junto.
     ignore:
       - dependency-name: "Microsoft.EntityFrameworkCore*"
         update-types: [version-update:semver-major]

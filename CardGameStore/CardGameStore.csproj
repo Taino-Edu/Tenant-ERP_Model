@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CardGameStore</RootNamespace>
@@ -35,16 +35,16 @@
   <ItemGroup>
     <!-- Entity Framework Core -->
     <PackageReference Include="ClosedXML" Version="0.105.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.30" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
     <!-- Authentication / JWT -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.30" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
 
     <!-- Swagger -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
@@ -53,11 +53,12 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
 
     <!-- SignalR (built into ASP.NET Core, but included for clarity) -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.30" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
 
-    <!-- Health Checks -->
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.30" />
-    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
+    <!-- Health Checks. O Microsoft.Extensions.Diagnostics.HealthChecks vem no
+         próprio ASP.NET Core desde o 10; referenciá-lo aqui gerava NU1510 e
+         arriscava duas versões do mesmo assembly. -->
+    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
 
     <!-- QR Code generation -->
     <PackageReference Include="QRCoder" Version="1.8.0" />

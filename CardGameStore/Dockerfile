@@ -4,7 +4,7 @@
 # =============================================================================
 
 # ---- STAGE 1: BUILD ----
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copia apenas o .csproj primeiro — camada em cache enquanto dependências não mudarem
@@ -23,14 +23,17 @@ COPY . .
 RUN dotnet publish -c Release -o /app/publish
 
 # ---- STAGE 2: RUNTIME ----
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+# A partir do .NET 10 a imagem padrão é Ubuntu 24.04 (noble), não mais Debian.
+# O repositório PGDG abaixo se resolve pelo codinome (lsb_release -cs), então
+# serve às duas; o provider legacy do OpenSSL é conferido no próprio build.
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # curl é necessário para o healthcheck do docker-compose; openssl para verificar
 # o provider legacy no build (abaixo); postgresql-client-16 pro backup de tenant
 # (Multitenancy/Backup) via pg_dump — versão 16 pra bater com o servidor
 # (postgres:16-alpine no docker-compose.prod.yml), em vez do postgresql-client
-# genérico do Debian (fica em v15, cliente mais velho que o servidor).
+# genérico da distribuição, que não acompanha a versão do servidor.
 RUN apt-get update && apt-get install -y --no-install-recommends curl openssl gnupg lsb-release wget \
     && sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
     && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
