@@ -267,7 +267,8 @@ SWAGGER_ENABLED=true
 ## Como Executar Localmente
 
 ### Pré-requisitos
-- .NET 10 SDK, Node.js 20+ e Docker (só pro PostgreSQL). O `global.json` fixa a linha do SDK aceita pelo projeto.
+- .NET 10 SDK, Node.js 24 LTS e Docker (só pro PostgreSQL). O `global.json` e o
+  `frontend/.nvmrc` fixam as linhas de runtime aceitas pelo projeto.
 
 ### Passos
 1. PostgreSQL — não há mais fallback pra SQLite; a API não sobe sem banco. Use o

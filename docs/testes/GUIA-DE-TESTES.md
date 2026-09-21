@@ -2,7 +2,7 @@
 
 ## Pré-requisitos
 
-Docker (só pro PostgreSQL), .NET 8 SDK e Node.js 20+.
+Docker (só pro PostgreSQL), .NET 10 SDK e Node.js 24 LTS.
 Docker Desktop: https://www.docker.com/products/docker-desktop
 
 ---

@@ -3,7 +3,11 @@ node_modules/
 
 # ── Build anterior ────────────────────────────────────────────────────────────
 .next/
+.next-*/
 out/
+tsconfig.tsbuildinfo
+playwright-report/
+test-results/
 
 # ── Git e CI ─────────────────────────────────────────────────────────────────
 .git/

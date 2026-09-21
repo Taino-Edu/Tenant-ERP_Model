@@ -115,7 +115,7 @@ Next.js SSR               ASP.NET Core 8
 | Serviço | Imagem | Porta | Volumes | Health Check |
 |---------|--------|-------|---------|--------------|
 | nginx | nginx:1.27-alpine | 80→80 | — | curl /health |
-| frontend | node:20-alpine | 3000 (interno) | — | GET / |
+| frontend | node:24-alpine | 3000 (interno) | — | GET / |
 | api | custom dotnet:8 | 5000 (interno) | api_uploads | GET /health |
 | postgres | postgres:16-alpine | 5432 (interno) | postgres_data | pg_isready |
 | mongodb | mongo:7-jammy | 27017 (interno) | mongo_data | mongosh ping |
