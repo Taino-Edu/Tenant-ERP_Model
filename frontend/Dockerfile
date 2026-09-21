@@ -8,7 +8,8 @@ RUN npm ci --legacy-peer-deps
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-# CACHEBUST invalida o cache do COPY a cada deploy sem re-baixar npm
+# CACHEBUST só é alterado no build local de emergência. A CI deixa o valor
+# padrão para o BuildKit reaproveitar esta camada quando o frontend não mudou.
 ARG CACHEBUST=1
 RUN echo "Build: $CACHEBUST"
 COPY . .

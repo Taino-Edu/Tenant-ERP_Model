@@ -10,6 +10,24 @@ updates:
       frontend-minor-patch:
         update-types: [minor, patch]
     ignore:
+      # Next 16 e React 19 formam uma migração só: lint saiu do Next, o proxy
+      # substitui o middleware e React/React DOM/tipos precisam subir juntos.
+      # O Next continua fora desta lista para que a major permaneça visível;
+      # React isolado fica bloqueado até a migração controlada MOD-001.
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react-dom"
+        update-types: [version-update:semver-major]
+      # Tailwind 4 muda PostCSS, configuração e CSS; Lucide 1 remove ícones de
+      # marcas usados no site. Ambas exigem migração de código (MOD-002/003).
+      - dependency-name: tailwindcss
+        update-types: [version-update:semver-major]
+      - dependency-name: lucide-react
+        update-types: [version-update:semver-major]
       # O Next resolve o compilador pelo pacote `typescript`; na major 7 ele não
       # o encontra e aborta o lint antes de compilar qualquer coisa. Reabrir
       # quando a versão do Next em uso declarar suporte.
@@ -32,6 +50,10 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
+      # Estes pacotes instrumentam a mesma suíte e devem permanecer alinhados.
+      # A regra também evita dois deploys de produção para uma única atualização.
+      coverage:
+        patterns: ["coverlet.collector", "coverlet.msbuild"]
       backend-minor-patch:
         update-types: [minor, patch]
     # A solução tem alvo net10.0 (LTS, suporte até novembro de 2028). As majors

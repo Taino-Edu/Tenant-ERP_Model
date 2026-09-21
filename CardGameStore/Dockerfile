@@ -14,9 +14,9 @@ RUN dotnet restore
 # Copia o restante e publica em modo Release
 # Nota: --no-restore omitido intencionalmente — garante resolve correto de pacotes
 # mesmo quando a camada de restore está em cache com versão anterior do .csproj
-# O update.sh fornece CACHEBUST em cada deploy. Sem consumir esse argumento, o
-# BuildKit da VPS já reutilizou COPY/publish antigos após um git pull e publicou
-# uma API anterior com uma tag nova.
+# O update.sh fornece CACHEBUST somente no build local de emergência. Na CI, o
+# cache é dirigido pelo conteúdo do contexto: mudar o SHA sem mudar CardGameStore
+# não deve recompilar a aplicação inteira.
 ARG CACHEBUST=local
 RUN echo "Build: ${CACHEBUST}"
 COPY . .

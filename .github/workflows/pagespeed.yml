@@ -41,7 +41,7 @@ permissions:
 jobs:
   medir:
     name: Mede as páginas públicas
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # No gatilho workflow_run, só mede se o deploy passou — medir depois de um
     # CI vermelho é medir a versão anterior e atribuir a nota à nova.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
