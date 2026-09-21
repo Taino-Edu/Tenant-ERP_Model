@@ -62,7 +62,8 @@
 - **Frontend:** Next.js 15.5.25, React 18.3.1 e Tailwind CSS 3.4; existem **20
   specs Playwright** em `frontend/tests/`, das quais o lote público determinístico
   roda a cada PR. A revisão de dependências de 2026-09-21 terminou com
-  `npm audit` sem vulnerabilidades conhecidas.
+  `npm audit` sem vulnerabilidades conhecidas. CI, imagem e tipos usam Node 24
+  LTS; a linha 20 foi removida depois do fim de suporte em abril de 2026.
 - **Backend:** ASP.NET Core/EF Core 10; o repositório contém 78 migrations de
   catálogo/tenant e o boot em banco vazio foi validado durante a migração.
 - **Operação:** as imagens de produção são identificadas pelo SHA aprovado; o
