@@ -26,6 +26,14 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: "@types/react-dom"
         update-types: [version-update:semver-major]
+      - dependency-name: eslint-config-next
+        update-types: [version-update:semver-major]
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      # Runtime, CI e tipos serão alinhados manualmente à linha LTS. Node 26 só
+      # vira LTS no fim de outubro de 2026; não antecipar seus tipos no Node 24.
+      - dependency-name: "@types/node"
+        versions: [">= 25.0.0"]
       # Tailwind 4 muda PostCSS, configuração e CSS; Lucide 1 remove ícones de
       # marcas usados no site. Ambas exigem migração de código (MOD-002/003).
       - dependency-name: tailwindcss
