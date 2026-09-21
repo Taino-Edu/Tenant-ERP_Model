@@ -7,6 +7,10 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
+      # Plugin e parser têm peer dependency na mesma linha e quebram o npm ci
+      # quando uma major é proposta sem a outra.
+      typescript-eslint:
+        patterns: ["@typescript-eslint/eslint-plugin", "@typescript-eslint/parser"]
       frontend-minor-patch:
         update-types: [minor, patch]
     ignore:

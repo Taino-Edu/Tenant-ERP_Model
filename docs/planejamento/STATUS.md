@@ -59,9 +59,10 @@
   pós-deploy.
 - **Suíte backend:** **1.090 testes aprovados, zero falhas**, novamente observados
   na CI após as atualizações de dependências desta rodada.
-- **Frontend:** Next.js 15.5.21, React 18.3.1 e Tailwind CSS 3.4; existem **20
+- **Frontend:** Next.js 15.5.25, React 18.3.1 e Tailwind CSS 3.4; existem **20
   specs Playwright** em `frontend/tests/`, das quais o lote público determinístico
-  roda a cada PR.
+  roda a cada PR. A revisão de dependências de 2026-09-21 terminou com
+  `npm audit` sem vulnerabilidades conhecidas.
 - **Backend:** ASP.NET Core/EF Core 10; o repositório contém 78 migrations de
   catálogo/tenant e o boot em banco vazio foi validado durante a migração.
 - **Operação:** as imagens de produção são identificadas pelo SHA aprovado; o
