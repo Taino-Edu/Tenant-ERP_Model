@@ -1,22 +1,23 @@
 # Backlog operacional — Tenant-ERP
 
-> **Revisado em 2026-09-08** contra a `main` em `2bfb896`. Esta parte do documento
+> **Revisado em 2026-09-21** contra a `main` em `ecd10f7`. Esta parte do documento
 > é o backlog vigente. O conteúdo anterior foi preservado no final como histórico
 > e não deve ser usado sozinho para decidir o próximo trabalho.
 >
 > **Base funcional auditada:** a varredura original foi feita sobre `38228e4`
-> (2026-08-11). Entre aquele commit e `2bfb896` entraram **170 commits**, e a
-> revisão de 2026-09-08 corrigiu os itens que ficaram para trás — estão marcados
-> com `· revisado 2026-09-08`. Não confundir “há uma branch” com “a funcionalidade
-> está pronta na main”.
+> (2026-08-11). As revisões de 8 e 21 de setembro reconciliaram a fila com a
+> `main`; itens históricos continuam abaixo para rastreabilidade. Não confundir
+> “há uma branch” com “a funcionalidade está pronta na main”.
 >
 > **Este documento não governa sozinho.** Ver a divisão em
 > [`STATUS.md`](STATUS.md):
 > - [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) manda sobre
->   pagamentos, pedidos online, multi-CNPJ e comandas (`RB-01` a `RB-05`).
+>   pagamentos, pedidos online, multi-CNPJ, comandas e aplicativos (`RB-01` a
+>   `RB-06`).
 > - [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md)
 >   governa os achados `RES-00x` e `AUTH-00x` de idempotência, concorrência,
->   guardrails de produção e sessão. **Esses são hoje os itens P0 reais.**
+>   guardrails de produção e sessão. `RES-001` a `RES-007` e `AUTH-001` já foram
+>   corrigidos; `AUTH-002` continua aberto.
 
 ## Como manter este backlog
 
@@ -32,35 +33,34 @@
 
 ## Resumo executivo
 
-### Situação confirmada · revisado 2026-09-08
+### Situação confirmada · revisado 2026-09-21
 
-- A `main` está limpa e alinhada com `origin/main` em `2bfb896`.
+- A referência auditada da `main` é `ecd10f7`; a fila de PRs de dependência foi
+  revalidada sobre .NET 10 antes dos merges desta rodada.
 - Multi-tenant, billing, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões têm implementação na `main`.
 - Consentimento de cookies versionado, documentos legais, sitemap, robots,
   metadados sociais e bloqueio de indexação das áreas privadas estão na `main`.
 - A prospecção persistente e a cobertura OSM ampliada estão na `main`; o bot
   interno de captação com revisão humana também.
-- **Novo desde 2026-08-11:** cobrança automática da plataforma via Asaas
-  (`RB-01`, concluído), comandas fora do gate do Restaurante (`RB-05`),
-  integração REST multi-tenant por escopos, motor fiscal hospedado para tenants
-  externos, módulos empacotados em `packages/`, Next 15, GTM/Meta Pixel atrás do
-  consentimento, navegação por área no admin e vitrine pública com controle de
-  visibilidade.
+- **Novo desde a última revisão:** correções `RES-001` a `RES-007` e `AUTH-001`,
+  cadastro autônomo de lojas, condições comerciais por tenant, avisos de
+  cobrança, deploy de imagens por SHA via GHCR e migração completa para .NET 10.
 - **CI:** build + testes do backend contra Postgres real, lint + build do
   frontend, 11 verificações Playwright determinísticas em Chromium, deploy e
   smoke. Os fluxos autenticados que exigem tenant e banco ainda não rodam no CI.
-- **Suíte:** último número registrado é 893 testes, zero falhas (2026-08-26,
-  entrega do `RB-01`). Não reexecutada em 2026-09-08 — Docker local indisponível.
+- **Suíte:** 1.090 testes backend, zero falhas, observados novamente na CI em
+  2026-09-21; 20 specs Playwright existem no frontend.
+- **Repositório:** uma única worktree registrada; `REP-001` está concluído.
 
-### Direção recomendada · revisado 2026-09-08
+### Direção recomendada · revisado 2026-09-21
 
-1. **Fechar os riscos de resiliência antes de feature nova:** `RES-003`
-   (guardrails que só avisam), `RES-001` (idempotência da venda) e `RES-002`
-   (concorrência do crediário), nessa ordem. Ver
-   [a auditoria](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md).
-2. `REP-001`: decidir uma a uma as seis worktrees e as branches fora da `main`.
-3. `RB-02` (recebimento das vendas do lojista) e `RB-04` (multi-CNPJ) — os dois
+1. Fechar `AUTH-002` (lockout e MFA), começando pelas contas privilegiadas da
+   plataforma, e validar o cadastro autônomo com SMTP real.
+2. Quitar os avisos pós-.NET 10 com teste de PFX/A1 e executar `MOD-001` (Next 16
+   + React 19) como migração controlada.
+3. `RB-06.1` (PWA do consumidor), `RB-02` (recebimento das vendas do lojista) e
+   `RB-04` (multi-CNPJ) — os dois últimos
    de prioridade alta que sobraram do rebuild.
 4. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) e conectar a origem da
    prospecção às oportunidades e atividades.
@@ -69,16 +69,13 @@
 
 ## P0 — segurança, integridade e liberação
 
-> **Os P0 reais de 2026-09-08 não estão nesta seção.** A auditoria de resiliência
-> levantou nove achados, e os três primeiros estão acima de tudo que está
-> listado aqui — venda avulsa não
-> idempotente com retry do EF ligado, acúmulo de crediário que perde atualização
-> concorrente, e três guardrails de produção que só avisam em vez de derrubar o
-> boot. Estão em
+> A auditoria de 2026-09-08 levantou nove achados. `RES-001` a `RES-007` e
+> `AUTH-001` foram corrigidos e validados; `AUTH-002` (lockout/2FA) permanece como
+> o P0 de autenticação atual. A evidência original está em
 > [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md)
-> como `RES-001` a `RES-007` e `AUTH-001`/`AUTH-002`, com arquivo e linha.
-> Os itens abaixo são anteriores e permanecem válidos no que diz respeito ao seu
-> próprio escopo.
+> e o fechamento técnico em
+> [`CORRECOES-RESILIENCIA-2026-09-08.md`](../auditorias/CORRECOES-RESILIENCIA-2026-09-08.md).
+> Os itens abaixo permanecem válidos no próprio escopo.
 
 ### SEC-001 — Sanitizar HTML dos comprovantes
 
@@ -89,13 +86,9 @@
   forma de pagamento, URL e atributos HTML.
 - **Validação:** lint e build de produção aprovados; 2 testes Playwright cobrem
   `<script>`, `<`, `>`, `&`, aspas, apóstrofo, acentos e valores formatados.
-- **Observação:** a correção está na `main` e não depende mais de worktree
-  nenhuma. A worktree `.claude/worktrees/musing-solomon-133b2e` ainda guarda a
-  versão original não commitada dos dois arquivos
-  (`frontend/app/admin/venda-avulsa/page.tsx` e
-  `frontend/components/admin/comanda/shared.ts`) — é descarte, e sai junto com
-  `REP-001`. Confirmado em 2026-09-08: é a **única** das seis worktrees com
-  alteração pendente.
+- **Observação:** a correção está na `main` e não depende mais de worktree. A
+  worktree temporária que ainda guardava a versão original em 2026-09-08 já foi
+  removida na conclusão do `REP-001`.
 
 ### QA-001 — Descobrir por que a suíte unitária completa não termina
 
@@ -146,26 +139,59 @@
 
 ### REP-001 — Reconciliar worktrees e branches antigas
 
-- **Estado:** `PRONTO PARA FAZER` · revisado 2026-09-08 (segue pendente; a
-  evidência abaixo foi reconferida com `git worktree list` e `git status`)
-- **Seis worktrees registradas. Não commitado:** somente a citada em `SEC-001`
-  (`.claude/worktrees/musing-solomon-133b2e`, dois arquivos, conteúdo já
-  superado pela `main` — é descarte).
-- **Worktrees limpas com commits fora da main:**
-  - `C:/tmp/octus-security-verify` — `fc72d29`, gestão/segurança da equipe;
-  - `C:/tmp/Tenant-ERP-load-audit` — `7c0dcc1`, branch `codex/release-load-audit`;
-  - `C:/tmp/Tenant-ERP-pr38-reconcile` — `49a1eb6`, branch `codex/fix-vapid-bootstrap`;
-  - `C:/tmp/Tenant-ERP-swagger` — `0d5fb5d`, branch `codex/fix-prod-swagger`;
-  - `.claude/worktrees/vibrant-faraday-ff6046` — `6aebedb`, HEAD solto.
-- **Nota:** `claude/plano-logout-sessao` é a branch que ataca o `AUTH-001` da
-  auditoria de resiliência — revisar essa primeiro, não por último.
-- **Branches locais não integralmente incorporadas:** planos técnicos, integrações,
-  isolamento, VAPID/Swagger e auditoria de carga. Algumas divergem da `main` e não
-  devem ser mescladas em lote.
-- **Próxima ação:** revisar uma por vez contra a `main`, classificar como
-  `incorporar`, `substituída` ou `arquivar`, e só depois remover worktrees.
-- **Concluído quando:** nenhuma worktree tem alteração sem dono e toda branch não
-  incorporada tem decisão registrada.
+- **Estado:** `CONCLUÍDO` em 2026-09-21.
+- **Evidência:** `git worktree list` retorna somente o checkout principal. As
+  worktrees temporárias e alterações sem dono listadas na revisão de 8 de
+  setembro foram reconciliadas; `AUTH-001` também já foi incorporado pela rodada
+  de resiliência.
+- **Regra daqui em diante:** worktree temporária só permanece registrada enquanto
+  houver tarefa ativa com dono; ao encerrar, incorporar, arquivar ou remover.
+
+## P1 — modernização técnica controlada
+
+### MOD-001 — Next.js 16 + React 19
+
+- **Estado:** `PRONTO PARA FAZER` · registrado em 2026-09-21.
+- **Motivo:** os PRs automáticos #128 e #142 provaram que não é bump isolado.
+  `next lint` foi removido, o Turbopack rejeita um seletor escapado no CSS,
+  middleware migra para proxy e React/React DOM/tipos precisam subir juntos.
+- **Escopo:** usar o codemod oficial; migrar lint para ESLint CLI; alinhar React,
+  React DOM e tipos; corrigir CSS/Turbopack; revisar middleware/proxy; executar
+  lint, TypeScript, build e smoke Playwright.
+- **Dependabot:** a major do Next permanece visível. Majors isoladas de React e
+  tipos ficam ignoradas até esta migração para não recriar um grafo inválido.
+- **Concluído quando:** build de produção e smoke passam sem compatibilidade
+  forçada e sem dependências React em majors diferentes.
+
+### MOD-002 — Tailwind CSS 4
+
+- **Estado:** `PRONTO PARA FAZER` · registrado em 2026-09-21.
+- **Motivo:** o PR #129 trocava só a versão e falhava; a major muda integração
+  PostCSS, configuração e CSS.
+- **Escopo:** seguir a migração oficial, revisar tokens/plugins e comparar as
+  telas públicas e administrativas antes/depois.
+- **Dependabot:** major temporariamente ignorada; atualizações compatíveis da 3.x
+  continuam permitidas.
+
+### MOD-003 — Lucide 1 e ícones de marcas
+
+- **Estado:** `PRONTO PARA FAZER` · registrado em 2026-09-21.
+- **Motivo:** a major removeu ícones de marcas usados pelo projeto, incluindo
+  `Instagram` no rodapé; o PR #63 estava antigo, conflitante e não compilava.
+- **Escopo:** substituir marcas por SVGs/fontes apropriadas, então atualizar o
+  Lucide e validar todas as importações e telas afetadas.
+- **Dependabot:** major temporariamente ignorada até a substituição das marcas.
+
+### DOTNET-010 — Eliminar avisos pós-migração para .NET 10
+
+- **Estado:** `PRONTO PARA FAZER` · registrado em 2026-09-21.
+- **Evidência:** a CI verde ainda anota `SYSLIB0057` em `Pkcs12Loader`,
+  `ASPDEPR005` em `Program.cs` e `CA2024` em `GeminiChatService`.
+- **Escopo:** migrar para `X509CertificateLoader` com teste de PFX/A1 legado,
+  usar `KnownIPNetworks`/`System.Net.IPNetwork` e substituir a leitura baseada em
+  `EndOfStream` por loop assíncrono seguro.
+- **Concluído quando:** build .NET 10 sem esses avisos e teste dedicado garante a
+  abertura de certificados fiscais legados.
 
 ## P1 — CRM comercial de padrão de mercado
 

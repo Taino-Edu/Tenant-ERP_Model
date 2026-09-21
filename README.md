@@ -65,9 +65,9 @@ Detalhes de cada camada e como somar uma rota nova sem furar o modelo: **[Perfis
 ## Stack Tecnológica
 
 ### Backend — `CardGameStore/`
-- **Framework:** ASP.NET Core 8 (C#)
+- **Framework:** ASP.NET Core 10 LTS (C#)
 - **Banco de Dados:** PostgreSQL 16
-- **ORM:** Entity Framework Core 8 (sem migrations automáticas globais; isolado por Tenant no `TenantConnectionInterceptor`)
+- **ORM:** Entity Framework Core 10 (sem migrations automáticas globais; isolado por Tenant no `TenantConnectionInterceptor`)
 - **Comunicação em Tempo Real:** SignalR (SSE + Long Polling)
 - **Autenticação:** JWT (HttpOnly Cookies + Refresh Token)
 - **Segurança de Senhas:** BCrypt.Net
@@ -81,6 +81,7 @@ Detalhes de cada camada e como somar uma rota nova sem furar o modelo: **[Perfis
 
 ### Infraestrutura e Deploy
 - **Containers:** Docker + Docker Compose
+- **Imagens:** GitHub Actions + GHCR, identificadas pelo SHA aprovado na CI
 - **Proxy Reverso:** Nginx (configuração de proxy reverso e headers forward)
 - **Gerenciamento de DNS/SSL:** Cloudflare (SSL/TLS Flexible em desenvolvimento/produção)
 
@@ -90,7 +91,7 @@ Detalhes de cada camada e como somar uma rota nova sem furar o modelo: **[Perfis
 
 ```
 Tenant-ERP/
-├── CardGameStore/                  # Backend ASP.NET Core 8
+├── CardGameStore/                  # Backend ASP.NET Core 10
 │   ├── Controllers/                # Controllers (Auth, Product, Comanda, Contador, Platform...)
 │   ├── Multitenancy/               # Lógica de Multi-tenant, isolamento, provisionamento e catálogo
 │   │   ├── CatalogDbContext.cs     # Contexto global do catálogo (tenants, contadores)
@@ -122,7 +123,7 @@ Tenant-ERP/
     ├── docker-compose.prod.yml     # Orquestração de produção
     ├── nginx/                      # Configurações do Nginx
     ├── setup.sh                    # Setup automático da VPS (instala Docker, clona e gera envs)
-    └── update.sh                   # Script de deploy automatizado via git pull e docker rebuild
+    └── update.sh                   # Deploy do SHA aprovado via GHCR, com backup e rollback
 ```
 
 ---
@@ -139,8 +140,8 @@ decidir.
 | [Status executivo](./docs/planejamento/STATUS.md) | **Ponto de partida.** Estado verificado, entregas recentes e riscos abertos |
 | [Índice da documentação](./docs/README.md) | Mapa de toda a documentação do projeto |
 | [Backlog operacional](./docs/planejamento/BACKLOG.md) | Fila contínua: CRM, prospecção, dados, QA, UX, infra |
-| [Escopo do rebuild (RB-01 a RB-05)](./docs/planejamento/REBUILD-ESCOPO-2026-08.md) | Pagamentos, pedidos online, multi-CNPJ e comandas — manda sobre o backlog nesses temas |
-| [Auditoria de resiliência e autenticação](./docs/auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Idempotência, concorrência, guardrails de produção e sessão — os P0 atuais |
+| [Escopo do rebuild (RB-01 a RB-06)](./docs/planejamento/REBUILD-ESCOPO-2026-08.md) | Pagamentos, pedidos online, multi-CNPJ, comandas e aplicativos móveis — manda sobre o backlog nesses temas |
+| [Auditoria de resiliência e autenticação](./docs/auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Evidência dos achados de idempotência, concorrência, operação e sessão, com o fechamento já registrado |
 | [Arquitetura completa](./docs/arquitetura/DOCUMENTACAO-COMPLETA.md) | Arquitetura, fluxos, DER resumido, análise crítica |
 | [Modelagem de dados](./docs/arquitetura/MODELAGEM-DE-DADOS.md) | Modelo conceitual, lógico e físico; convenções do schema; modelagem da DRE, do fechamento de período e do razão de estoque |
 | [Integração REST multi-tenant](./docs/arquitetura/INTEGRACAO-API-MULTITENANT.md) | API por escopos para tenants externos integrados |
@@ -266,7 +267,7 @@ SWAGGER_ENABLED=true
 ## Como Executar Localmente
 
 ### Pré-requisitos
-- .NET 8 SDK, Node.js 20+ e Docker (só pro PostgreSQL).
+- .NET 10 SDK, Node.js 20+ e Docker (só pro PostgreSQL). O `global.json` fixa a linha do SDK aceita pelo projeto.
 
 ### Passos
 1. PostgreSQL — não há mais fallback pra SQLite; a API não sobe sem banco. Use o
@@ -309,9 +310,22 @@ curl -fsSL https://raw.githubusercontent.com/Taino-Edu/Tenant-ERP_Model/main/dep
 Instala Docker, configura firewall (UFW), clona o repositório em `/opt/tenant-erp`, gera segredos e sobe os containers.
 
 ### Atualizar após novo commit
+
+O caminho normal é automático: depois de backend, frontend e smoke passarem na
+`main`, a CI publica as imagens no GHCR com a tag do SHA aprovado e chama o
+`update.sh` no VPS. O script faz backup, baixa exatamente essas imagens, aplica
+as migrations no boot, verifica a saúde e reverte as imagens se a aplicação não
+subir.
+
+Para uma execução manual, informe obrigatoriamente o SHA completo que já passou
+pela CI:
+
 ```bash
-bash /opt/tenant-erp/deploy/update.sh
+DEPLOY_SHA=<sha-de-40-caracteres> bash /opt/tenant-erp/deploy/update.sh
 ```
+
+`DEPLOY_BUILD_LOCAL=1` fica reservado para emergência quando o GHCR estiver
+indisponível; ele volta a compilar as imagens na própria VPS.
 
 ### Backup do PostgreSQL
 ```bash

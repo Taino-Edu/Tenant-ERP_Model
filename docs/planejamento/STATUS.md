@@ -1,99 +1,107 @@
 # Status atual — Tenant-ERP
 
-> **Atualizado em 2026-09-08**, contra a `main` em `2bfb896`. Resumo executivo:
-> a fila priorizada está em [`BACKLOG.md`](BACKLOG.md), as decisões de escopo de
-> agosto em [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) e os achados
-> de resiliência em
+> **Atualizado em 2026-09-21**, contra a `main` em `ecd10f7`. Este é o ponto de
+> partida para decisões novas. A fila detalhada está em [`BACKLOG.md`](BACKLOG.md),
+> o escopo `RB-01` a `RB-06` em
+> [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) e a auditoria que
+> originou as correções de resiliência em
 > [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md).
 >
-> **Aviso de leitura:** a revisão anterior deste arquivo era de 2026-08-11 e
-> ficou quase um mês para trás de **170 commits**. Várias afirmações dela já
-> eram falsas (prospecção limitada a 60 resultados, gateway de pagamento não
-> escolhido, Next 14). Se este cabeçalho estiver com mais de um mês, desconfie
-> do conteúdo antes de decidir qualquer coisa com ele.
+> Documentos de auditoria preservam a fotografia e as linhas da data em que
+> foram escritos. Consulte este arquivo e o código antes de tratar um achado
+> histórico como pendência atual.
 
-## Onde os três documentos de planejamento se dividem
-
-Existiam dois documentos concorrentes sem dizer qual mandava. A divisão a partir
-de agora:
+## Onde cada documento manda
 
 | Documento | Governa |
 |---|---|
-| [`BACKLOG.md`](BACKLOG.md) | Fila operacional contínua: CRM, prospecção, dados, QA, UX, infra. |
-| [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) | `RB-01` a `RB-06`: pagamentos, pedidos online, multi-CNPJ, comandas e **aplicativos móveis**. **Manda sobre o backlog nesses temas.** |
-| [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Achados `RES-00x`/`AUTH-00x` de idempotência, concorrência, guardrails e sessão. |
+| [`STATUS.md`](STATUS.md) | Fotografia executiva verificada, entregas recentes, riscos e direção atual. |
+| [`BACKLOG.md`](BACKLOG.md) | Fila operacional contínua: produto, CRM, dados, QA, UX e infraestrutura. |
+| [`REBUILD-ESCOPO-2026-08.md`](REBUILD-ESCOPO-2026-08.md) | `RB-01` a `RB-06`: pagamentos, pedidos online, multi-CNPJ, comandas e aplicativos móveis. |
+| [`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md) | Evidência original dos achados `RES-00x`/`AUTH-00x`; o estado de execução está resumido abaixo. |
 
-## Entregue desde a revisão anterior (2026-08-11 → 2026-09-08)
+## Entregue desde 2026-09-08
 
-- **Cobrança automática da plataforma (`RB-01`) — concluída.** Gateway decidido:
-  **Asaas**, atrás da interface `IPlatformPaymentGateway`. Job emite, webhook dá
-  baixa, régua suspende e reativa sozinha. Validado ponta a ponta em sandbox em
-  2026-08-31. *Isto encerra o que o backlog antigo listava como `PAY-001` com
-  "decisão pendente de gateway".*
-- **Comandas fora do gate do Restaurante (`RB-05`)** — na `main` desde 2026-08-26.
-- **Integração REST multi-tenant por escopos**, tenants externos integrados e
-  motor fiscal hospedado para terceiros; módulos Financeiro e Fiscal empacotados
-  em `packages/` com script de exportação.
-- **Next.js 14.2.35 → 15.5.21.** *Isto encerra o `QA-004`, que o backlog ainda
-  listava como bloqueado.*
-- **Mensuração com consentimento:** GTM e Meta Pixel atrás do consentimento, com
-  escopo comercial e eventos.
-- **Navegação por área no admin**, com subpáginas dentro da área ativa.
-- **Vitrine pública de tenants** com controle de visibilidade por loja.
-- **Financeiro:** inteligência gerencial e lançamento/alteração manual de cobrança.
-- **Rate limit** extraído para política própria e testável.
-- **Correções de multi-tenancy:** tenant ausente não é cacheado, tenant
-  indisponível é identificado explicitamente, e o guard deixou de falhar aberto.
-- **Contato de segurança publicado** e smoke de deploy endurecido.
+- **Resiliência (`RES-001` a `RES-007`) e revogação de sessão (`AUTH-001`).**
+  Venda avulsa idempotente, crediário serializado com unicidade no banco,
+  guardrails de produção com fail-fast, prontidão de migration por tenant,
+  refresh tolerante a falha transitória, logout/reset que invalidam JWT, backup
+  de uploads e deploy serializado por SHA. A implementação e a validação estão
+  registradas em
+  [`CORRECOES-RESILIENCIA-2026-09-08.md`](../auditorias/CORRECOES-RESILIENCIA-2026-09-08.md).
+- **Cadastro autônomo de lojas.** O lojista solicita a loja no site, confirma o
+  e-mail e define a senha somente na confirmação; pedidos não confirmados não
+  provisionam schema nem administrador. O fluxo tem reserva atômica, token
+  hasheado, rate limit e limites diários.
+- **Condições comerciais e cobrança pelo painel.** Mensalidade, implantação,
+  descontos, primeira cobrança, emissão manual no Asaas e avisos de cobrança
+  passaram a ser controlados por tenant. Loja suspensa ainda consegue entrar e
+  pagar a assinatura.
+- **Deploy por artefato aprovado.** Backend e frontend são compilados no GitHub
+  Actions, publicados no GHCR com a tag do commit e baixados pela VPS. Backup,
+  lock, health check e rollback de imagens permanecem no `update.sh`.
+- **.NET 10 LTS.** API, testes, EF Core, imagens e CI saíram do .NET 8. O smoke
+  pós-deploy agora valida também o JSON do Swagger, que antes podia falhar com a
+  página da UI ainda verde.
+- **Manutenção de dependências.** Entraram atualização das Actions, Autoprefixer,
+  Microsoft.NET.Test.Sdk 18.10.1, xUnit runner 4, FluentAssertions 7.2.2 e
+  react-hot-toast 2.6.1, além de coverlet collector/msbuild 10.0.1. Majors que
+  exigem migração real foram retiradas da fila de merge automático e viraram
+  trabalho técnico explícito.
+- **Acessibilidade e cobertura de interface.** Error boundaries por área, smoke
+  Playwright público no build de produção e correções automáticas de
+  acessibilidade do site institucional estão na `main`.
 
-## Estado verificado hoje
+## Estado verificado em 2026-09-21
 
-- `main` limpa e alinhada com `origin/main` em `2bfb896`.
-- **CI** roda: build + testes do backend contra Postgres real, lint + build do
-  frontend, 11 verificações Playwright públicas e determinísticas em Chromium,
-  deploy no VPS e smoke pós-deploy. Os fluxos autenticados ainda não rodam no CI.
-- **20 specs Playwright** em `frontend/tests/` — o backlog antigo dizia cinco.
-- **Error boundaries** existem na raiz e em `/admin`, `/plataforma`, `/cliente`
-  e `/contador`; as áreas com shell próprio preservam sua navegação ao falhar.
-- **Seis worktrees** registradas; apenas `.claude/worktrees/musing-solomon-133b2e`
-  tem alteração não commitada (dois arquivos, os do `SEC-001` já portado). As
-  outras cinco estão limpas, com commits fora da `main`.
-- **Suíte de testes:** o último número registrado é **893 testes, zero falhas**
-  (2026-08-26, entrega do `RB-01`). **Não reexecutei** — o Docker local está
-  indisponível e o Postgres de teste sobe por `tests/docker-compose.yml`.
+- **CI/CD verde:** backend contra PostgreSQL 16, frontend com lint + build,
+  smoke Playwright em Chromium, publicação das duas imagens, deploy e smoke
+  pós-deploy.
+- **Suíte backend:** **1.090 testes aprovados, zero falhas**, novamente observados
+  na CI após as atualizações de dependências desta rodada.
+- **Frontend:** Next.js 15.5.21, React 18.3.1 e Tailwind CSS 3.4; existem **20
+  specs Playwright** em `frontend/tests/`, das quais o lote público determinístico
+  roda a cada PR.
+- **Backend:** ASP.NET Core/EF Core 10; o repositório contém 78 migrations de
+  catálogo/tenant e o boot em banco vazio foi validado durante a migração.
+- **Operação:** as imagens de produção são identificadas pelo SHA aprovado; o
+  deploy não recompila na VPS no caminho normal, preserva rollback automático e
+  os runners estão fixados em Ubuntu 24.04 para evitar a troca silenciosa de
+  `ubuntu-latest` anunciada para outubro de 2026.
+- **Repositório local:** uma única worktree registrada e nenhuma reconciliação
+  pendente (`REP-001` concluído).
 
-## Riscos abertos que valem mais que features novas
+## Riscos e trabalhos abertos que importam agora
 
-Detalhe e evidência em
-[`AUDITORIA-RESILIENCIA-2026-09-08.md`](../auditorias/AUDITORIA-RESILIENCIA-2026-09-08.md).
-
-1. **Venda avulsa não é idempotente** e o retry do EF está ligado — uma falha de
-   rede no commit pode registrar a venda duas vezes, com estoque e receita
-   dobrados (`RES-001`).
-2. **Acúmulo do crediário perde atualização concorrente**; não há token de
-   concorrência em lugar nenhum, e o índice de crediário aberto por cliente não é
-   único (`RES-002`).
-3. **Guardrails de produção que só avisam:** senha de seed padrão em duas contas
-   privilegiadas e segredo JWT de exemplo sem validação de boot (`RES-003`).
-4. **Loja com migration quebrada continua atendendo** e o health check diz que
-   está tudo bem (`RES-004`).
-5. **Backup não cobre os uploads** dos tenants (`RES-006`).
-6. **Logout não invalida o access token** e não há trava de conta nem 2FA
-   (`AUTH-001`, `AUTH-002`).
+1. **`AUTH-002`: lockout e MFA.** Ainda não existe bloqueio por conta contra
+   força bruta distribuída nem segundo fator para contas privilegiadas. Há plano
+   de MFA/TOTP e login federado, mas implementação e política continuam abertas.
+2. **Validar cadastro em ambiente real.** O fluxo de criação precisa de exercício
+   ponta a ponta em homologação/produção com SMTP real, incluindo entrega do
+   e-mail e provisionamento posterior à confirmação.
+3. **Dívida pós-.NET 10.** A CI aponta `SYSLIB0057` no carregamento de PFX,
+   `ASPDEPR005` nos forwarded headers e `CA2024` no leitor do Gemini. O PFX deve
+   ser migrado com teste de certificados A1 legados; não é troca mecânica.
+4. **Modernização do frontend.** Next 16 + React 19, Tailwind 4 e Lucide 1 são
+   migrações de código separadas (`MOD-001` a `MOD-003` no backlog), não bumps de
+   versão. A major do Next permanece visível no Dependabot; as demais ficam
+   temporariamente ignoradas para não recriar PRs sabidamente quebrados.
+5. **Proteção da `main`.** Não há regra de branch/ruleset impedindo merge com CI
+   pendente. A disciplina atual é operacional; transformar os checks essenciais
+   em obrigatórios reduz o risco de regressão por merge manual.
 
 ## Próxima direção recomendada
 
-1. Fechar os itens de resiliência `RES-003`, `RES-001` e `RES-002` — nessa ordem.
-2. `REP-001`: decidir uma a uma as seis worktrees e as branches fora da `main`.
-3. `RB-06.1` — o PWA do consumidor. Fura a fila por ser barato e não depender de
-   nada: o PWA já existe, mas foi construído para o lojista (manifest descreve o
-   ERP, atalhos apontam para a Frente de Caixa, ícone do iOS é SVG e nenhum
-   tenant tem ícone próprio).
-4. `RB-02` (recebimento das vendas do lojista) e `RB-04` (multi-CNPJ), os dois de
-   prioridade alta que sobraram do rebuild. `RB-02` é dependência do app de
-   consumidor.
-5. Consolidar CRM (contas, contatos, atribuição) e a camada analítica.
-6. Prospecção: favoritos, filtros, seleção em lote e deduplicação secundária.
+1. Fechar `AUTH-002`, começando por MFA das contas da plataforma e política de
+   recuperação/lockout que não permita negação de serviço trivial.
+2. Executar o teste real do cadastro com SMTP e registrar a evidência operacional.
+3. Quitar os avisos pós-.NET 10 em PR pequeno, com teste dedicado ao certificado
+   A1; qualquer futura troca do runner Ubuntu deve ser validada explicitamente.
+4. Fazer `MOD-001` (Next 16 + React 19) com codemod, ESLint CLI, migração de
+   middleware/proxy, correção do CSS no Turbopack e smoke completo. Tailwind 4 e
+   Lucide 1 entram depois, cada um em PR próprio.
+5. Retomar produto: `RB-06.1` (PWA do consumidor), `RB-02` (recebimento das
+   vendas do lojista) e `RB-04` (multi-CNPJ), então consolidar CRM e analytics.
 
 ## Bloqueios externos
 
@@ -101,10 +109,7 @@ Detalhe e evidência em
   (`FIS-001`).
 - **Cloudflare Full (Strict)** depende de certificado de origem no VPS
   (`OPS-002`).
-- **Indexação no Google** (`MKT-001`): propriedade acessível e sitemap processado
-  com 6 URLs; trava atual é o alerta "Páginas enganosas" sem URLs de amostra.
+- **Indexação no Google** (`MKT-001`) ainda depende da revisão externa do alerta
+  de páginas enganosas.
 - **Dados externos de mercado** dependem de fonte autorizada, orçamento e base
   legal.
-
-> Pagamentos recorrentes **saíram** desta lista: o gateway foi escolhido e o
-> `RB-01` está concluído.

@@ -22,7 +22,7 @@ on:
 jobs:
   backend:
     name: Backend (build + testes vs Postgres)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -59,7 +59,7 @@ jobs:
 
   frontend:
     name: Frontend (build Next.js)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
@@ -109,7 +109,7 @@ jobs:
   # do repositório, com os mesmos nomes e valores do .env da VPS.
   images:
     name: Imagens no GHCR (main)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [backend, frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -150,7 +150,6 @@ jobs:
           tags: |
             ghcr.io/taino-edu/tenant-erp-api:${{ github.sha }}
             ghcr.io/taino-edu/tenant-erp-api:main
-          build-args: CACHEBUST=${{ github.sha }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
@@ -164,7 +163,6 @@ jobs:
             ghcr.io/taino-edu/tenant-erp-frontend:${{ github.sha }}
             ghcr.io/taino-edu/tenant-erp-frontend:main
           build-args: |
-            CACHEBUST=${{ github.sha }}
             API_URL=${{ vars.APP_URL }}
             ROOT_DOMAIN=${{ vars.MULTITENANCY_ROOT_DOMAIN }}
             GTM_ID=${{ vars.GTM_ID }}
@@ -176,7 +174,7 @@ jobs:
 
   deploy:
     name: Deploy no VPS (main)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [backend, frontend, images]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     concurrency:
