@@ -34,6 +34,16 @@ public interface IPlatformBillingService
     /// <summary>Marca como paga (ou reabre, passando null em pagoEm).</summary>
     Task<TenantChargeDto> DefinirPagamentoAsync(Guid chargeId, DateTime? pagoEm);
 
+    /// <summary>O que a loja deve hoje: cobranças em aberto com valor, da mais
+    /// antiga para a mais nova. Vazio quando não deve nada.</summary>
+    Task<List<TenantChargeDto>> ListarEmAbertoDaLojaAsync(Guid tenantId);
+
+    /// <summary>Dá baixa em TODAS as cobranças em aberto da loja, com a data de
+    /// hoje. É o "recebi por fora e quero marcar a loja como paga" da lista de
+    /// lojas — marcar só o status da loja não paga cobrança nenhuma, e a régua
+    /// desfazia a mudança na rodada seguinte. Devolve quantas foram baixadas.</summary>
+    Task<int> BaixarCobrancasEmAbertoAsync(Guid tenantId);
+
     /// <summary>Cria uma cobrança avulsa — implantação negociada, mês de
     /// cortesia, ajuste combinado fora do gerador automático.</summary>
     Task<TenantChargeDto> CriarCobrancaAsync(CriarCobrancaRequest request);

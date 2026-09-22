@@ -46,12 +46,16 @@ public class PlatformBillingAutomationTests
     private static Tenant NovoTenant(
         string slug = "loja-teste",
         TenantStatus status = TenantStatus.Active,
-        TenantPaymentStatus pagamento = TenantPaymentStatus.Pago)
+        TenantPaymentStatus pagamento = TenantPaymentStatus.Pago,
+        bool suspensaPelaRegua = false)
         => new()
         {
             Slug          = slug,
             SchemaName    = "tenant_" + slug.Replace('-', '_'),
             Status        = status,
+            // A marca de quem a régua derrubou. Suspensão manual fica sem ela, e
+            // por isso a régua não a reabre.
+            SuspendedByBilling = suspensaPelaRegua,
             PaymentStatus = pagamento,
             MonthlyPrice  = 269m,
         };
@@ -146,7 +150,8 @@ public class PlatformBillingAutomationTests
     public async Task Regua_QuitouDepoisDeSuspensa_Reativa()
     {
         using var db = CreateDb();
-        var tenant = NovoTenant(status: TenantStatus.Suspended, pagamento: TenantPaymentStatus.Atrasado);
+        var tenant = NovoTenant(status: TenantStatus.Suspended, pagamento: TenantPaymentStatus.Atrasado,
+            suspensaPelaRegua: true);
         db.Tenants.Add(tenant);
         db.TenantCharges.Add(Cobranca(tenant.Id, diasDesdeVencimento: 20, paga: DateTime.UtcNow.Date));
         await db.SaveChangesAsync();
@@ -162,11 +167,12 @@ public class PlatformBillingAutomationTests
     [Fact]
     public async Task Regua_SuspensaManualmente_NaoReativaSozinha()
     {
-        // Suspensão manual (fim de contrato, abuso) não carrega PaymentStatus
-        // Atrasado. Sem essa distinção a régua reabriria uma loja que o dono da
-        // plataforma desligou de propósito — e ninguém ficaria sabendo.
+        // Suspensão manual (fim de contrato, abuso) não carrega SuspendedByBilling.
+        // Sem essa distinção a régua reabriria uma loja que o dono da plataforma
+        // desligou de propósito — e ninguém ficaria sabendo.
         using var db = CreateDb();
-        var tenant = NovoTenant(status: TenantStatus.Suspended, pagamento: TenantPaymentStatus.Pago);
+        var tenant = NovoTenant(status: TenantStatus.Suspended, pagamento: TenantPaymentStatus.Pago,
+            suspensaPelaRegua: false);
         db.Tenants.Add(tenant);
         await db.SaveChangesAsync();
 

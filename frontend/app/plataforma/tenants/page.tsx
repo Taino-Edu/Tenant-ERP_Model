@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto, getErrorMessage, TENANT_MODULES } from '@/lib/api'
+import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, TenantChargeDto, PlatformOverviewDto, getErrorMessage, TENANT_MODULES } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
@@ -13,7 +13,7 @@ import Spinner from '@/components/admin/ui/Spinner'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle, Store, EyeOff } from 'lucide-react'
+import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle, Store, EyeOff, Wallet, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
 import { PLANOS, PLANO_PERSONALIZADO, acharPlano } from '@/lib/planos'
 
@@ -127,6 +127,57 @@ function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: TenantSumma
 // ── Modal: módulos contratados ───────────────────────────────────────────────
 // Cada módulo é pago, então a descrição do que ele libera precisa caber em
 // algum lugar — dentro de uma célula de tabela ela só cabia como `title`.
+/** Marcar "Pago" na lista não paga cobrança nenhuma sozinho: antes desta tela o
+ *  status era gravado e a régua suspendia a loja de novo na rodada seguinte,
+ *  com e-mail de suspensão pro lojista. Aqui a baixa é explícita, e o que vai
+ *  ser baixado aparece antes de confirmar. */
+function ConfirmarBaixaModal({ tenant, cobrancas, total, saving, onConfirm, onClose }: {
+  tenant: TenantSummary
+  cobrancas: TenantChargeDto[]
+  total: number
+  saving: boolean
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  const reais = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  return (
+    <Modal onClose={onClose} maxWidth="sm" title="Marcar como paga" icon={Wallet}>
+      <div className="px-6 py-4 space-y-4">
+        <p className="text-sm text-gray-400">
+          A loja <strong className="text-white">{tenant.slug}</strong> tem{' '}
+          <strong className="text-white">{cobrancas.length === 1 ? '1 cobrança em aberto' : `${cobrancas.length} cobranças em aberto`}</strong>.
+          Confirmar dá baixa {cobrancas.length === 1 ? 'nela' : 'em todas'} com a data de hoje — use quando o pagamento entrou por fora (Pix, transferência).
+        </p>
+
+        <ul className="divide-y divide-surface-500 rounded-lg border border-surface-500 text-sm">
+          {cobrancas.map(c => (
+            <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
+              <span className="text-gray-300">
+                {c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade'}
+                <span className="text-gray-500"> · vence {fmtDate(c.vencimento)}</span>
+                {c.vencida && <span className="ml-2 text-red-400">vencida</span>}
+              </span>
+              <span className="font-mono text-white">{reais(c.valor)}</span>
+            </li>
+          ))}
+        </ul>
+
+        <p className="text-sm text-gray-300">
+          Total: <strong className="text-white">{reais(total)}</strong>
+        </p>
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          <button type="button" onClick={onConfirm} disabled={saving} className="btn-primary flex-1 justify-center">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Baixando...</> : <><Check className="w-4 h-4" /> Dar baixa</>}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function ModulesModal({ tenant, saving, onToggle, onClose }: {
   tenant: TenantSummary; saving: boolean; onToggle: (module: string) => void; onClose: () => void
 }) {
@@ -184,6 +235,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   const [backingUp, setBackingUp] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showModules, setShowModules] = useState(false)
+  // Cobranças que o backend recusou marcar como pagas sem confirmação (409).
+  const [baixaPendente, setBaixaPendente] = useState<{ cobrancas: TenantChargeDto[]; total: number } | null>(null)
   const [mensalidade, setMensalidade] = useState(String(tenant.monthlyPrice ?? 0))
   const [implantacao, setImplantacao] = useState(String(tenant.setupFee ?? 0))
   // "AAAA-MM-DD", o formato do <input type="date">; a API manda com hora UTC.
@@ -261,7 +314,10 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   // aparece como Personalizado em vez de sumir do select.
   const planoSelecionado = acharPlano(planName)?.nome ?? PLANO_PERSONALIZADO
 
-  async function saveBilling(next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]; monthlyPrice: number; setupFee: number; billingStartsOn: string }>) {
+  async function saveBilling(
+    next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]; monthlyPrice: number; setupFee: number; billingStartsOn: string }>,
+    darBaixaNasCobrancas = false,
+  ) {
     setSavingBilling(true)
     try {
       await platformApi.updateTenantBilling(tenant.id, {
@@ -271,11 +327,20 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
         monthlyPrice:    next.monthlyPrice,
         setupFee:        next.setupFee,
         billingStartsOn: next.billingStartsOn,
+        darBaixaNasCobrancas,
       })
-      toast.success('Billing atualizado.')
+      toast.success(darBaixaNasCobrancas ? 'Cobranças baixadas e loja marcada como paga.' : 'Billing atualizado.')
+      setBaixaPendente(null)
       onChanged()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao atualizar billing do tenant.'))
+      // "Pago" com dívida em aberto não é erro: é a confirmação da baixa. Só
+      // marcar o status não pagaria nada, e a régua suspenderia a loja de novo.
+      const dados = (err as { response?: { data?: { errorCode?: string; cobrancas?: TenantChargeDto[]; total?: number } } }).response?.data
+      if (dados?.errorCode === 'cobrancas_em_aberto' && dados.cobrancas) {
+        setBaixaPendente({ cobrancas: dados.cobrancas, total: dados.total ?? 0 })
+      } else {
+        toast.error(getErrorMessage(err, 'Erro ao atualizar billing do tenant.'))
+      }
     } finally {
       setSavingBilling(false)
     }
@@ -568,6 +633,17 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
           saving={savingBilling}
           onToggle={toggleModule}
           onClose={() => setShowModules(false)}
+        />,
+        document.body,
+      )}
+      {baixaPendente && createPortal(
+        <ConfirmarBaixaModal
+          tenant={tenant}
+          cobrancas={baixaPendente.cobrancas}
+          total={baixaPendente.total}
+          saving={savingBilling}
+          onConfirm={() => saveBilling({ paymentStatus: 'Pago' }, true)}
+          onClose={() => setBaixaPendente(null)}
         />,
         document.body,
       )}
