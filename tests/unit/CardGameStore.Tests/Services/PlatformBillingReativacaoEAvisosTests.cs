@@ -41,7 +41,10 @@ public class PlatformBillingReativacaoEAvisosTests
     private static Tenant LojaSuspensaPorAtraso() => new()
     {
         Slug = "loja-devendo", SchemaName = "tenant_loja_devendo", DisplayName = "Loja Devendo",
-        Status = TenantStatus.Suspended, PaymentStatus = TenantPaymentStatus.Atrasado,
+        // SuspendedByBilling é a marca de quem a régua derrubou — é ela que
+        // autoriza a reativação automática, e não mais o PaymentStatus.
+        Status = TenantStatus.Suspended, SuspendedByBilling = true,
+        PaymentStatus = TenantPaymentStatus.Atrasado,
         MonthlyPrice = 129m, BillingEmail = "dono@loja.test", BillingCnpj = "11222333000181",
         BillingStartsOn = Hoje.AddMonths(-3),
     };
@@ -133,7 +136,9 @@ public class PlatformBillingReativacaoEAvisosTests
     {
         using var db = CreateDb();
         var tenant = LojaSuspensaPorAtraso();
-        tenant.PaymentStatus = TenantPaymentStatus.Pago; // suspensão manual: fim de contrato
+        // Suspensão manual (fim de contrato, abuso): não foi a régua, então ela
+        // não reabre a loja nem quando a dívida some.
+        tenant.SuspendedByBilling = false;
         db.Tenants.Add(tenant);
         var cobranca = new TenantCharge
         {
@@ -147,6 +152,84 @@ public class PlatformBillingReativacaoEAvisosTests
             .DefinirPagamentoAsync(cobranca.Id, Hoje);
 
         (await db.Tenants.AsNoTracking().SingleAsync()).Status.Should().Be(TenantStatus.Suspended);
+    }
+
+    [Fact]
+    public async Task MarcarPagoNaListaNaoImpedeAReativacaoQuandoOPagamentoEntra()
+    {
+        // O bug: a régua só reativava quem estava com PaymentStatus "Atrasado".
+        // Marcar "Pago" à mão na lista de lojas apagava essa marca, e a loja
+        // ficava suspensa para sempre — inclusive depois de o pagamento entrar.
+        using var db = CreateDb();
+        var tenant = LojaSuspensaPorAtraso();
+        tenant.PaymentStatus = TenantPaymentStatus.Pago;
+        db.Tenants.Add(tenant);
+        var cobranca = new TenantCharge
+        {
+            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 129m,
+            ReferenceMonth = Hoje.AddMonths(-1), DueDate = Hoje.AddDays(-20),
+        };
+        db.TenantCharges.Add(cobranca);
+        await db.SaveChangesAsync();
+
+        await new PlatformBillingService(db, NullLogger<PlatformBillingService>.Instance, config: Config())
+            .DefinirPagamentoAsync(cobranca.Id, Hoje);
+
+        var depois = await db.Tenants.AsNoTracking().SingleAsync();
+        depois.Status.Should().Be(TenantStatus.Active);
+        depois.SuspendedByBilling.Should().BeFalse("a régua devolveu a loja e não deve mais reivindicá-la");
+    }
+
+    [Fact]
+    public async Task Regua_AoSuspender_MarcaQueFoiEla()
+    {
+        using var db = CreateDb();
+        var tenant = LojaSuspensaPorAtraso();
+        tenant.Status = TenantStatus.Active;
+        tenant.SuspendedByBilling = false;
+        tenant.PaymentStatus = TenantPaymentStatus.Pago;
+        db.Tenants.Add(tenant);
+        db.TenantCharges.Add(new TenantCharge
+        {
+            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 129m,
+            ReferenceMonth = Hoje.AddMonths(-1), DueDate = Hoje.AddDays(-20),
+        });
+        await db.SaveChangesAsync();
+
+        await new PlatformBillingService(db, NullLogger<PlatformBillingService>.Instance, config: Config())
+            .AplicarReguaDeCobrancaAsync();
+
+        var depois = await db.Tenants.AsNoTracking().SingleAsync();
+        depois.Status.Should().Be(TenantStatus.Suspended);
+        depois.SuspendedByBilling.Should().BeTrue("sem a marca, a loja não voltaria sozinha ao quitar");
+    }
+
+    [Fact]
+    public async Task BaixarCobrancasEmAberto_QuitaTudoEReativaALoja()
+    {
+        using var db = CreateDb();
+        var tenant = LojaSuspensaPorAtraso();
+        tenant.PaymentStatus = TenantPaymentStatus.Pago; // status já mexido à mão na lista
+        db.Tenants.Add(tenant);
+        db.TenantCharges.AddRange(
+            new TenantCharge
+            {
+                TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 129m,
+                ReferenceMonth = Hoje.AddMonths(-2), DueDate = Hoje.AddDays(-50),
+            },
+            new TenantCharge
+            {
+                TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 129m,
+                ReferenceMonth = Hoje.AddMonths(-1), DueDate = Hoje.AddDays(-20),
+            });
+        await db.SaveChangesAsync();
+
+        var baixadas = await new PlatformBillingService(db, NullLogger<PlatformBillingService>.Instance, config: Config())
+            .BaixarCobrancasEmAbertoAsync(tenant.Id);
+
+        baixadas.Should().Be(2);
+        (await db.TenantCharges.AsNoTracking().ToListAsync()).Should().OnlyContain(c => c.PaidAt != null);
+        (await db.Tenants.AsNoTracking().SingleAsync()).Status.Should().Be(TenantStatus.Active);
     }
 
     [Fact]

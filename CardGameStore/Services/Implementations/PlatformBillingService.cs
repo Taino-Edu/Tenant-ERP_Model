@@ -335,6 +335,39 @@ public class PlatformBillingService : IPlatformBillingService
         return lista[0];
     }
 
+    public Task<List<TenantChargeDto>> ListarEmAbertoDaLojaAsync(Guid tenantId) =>
+        MapearAsync(_catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.TenantId == tenantId && c.PaidAt == null && c.Amount > 0)
+            .OrderBy(c => c.DueDate));
+
+    public async Task<int> BaixarCobrancasEmAbertoAsync(Guid tenantId)
+    {
+        var emAberto = await _catalog.TenantCharges
+            .Where(c => c.TenantId == tenantId && c.PaidAt == null && c.Amount > 0)
+            .OrderBy(c => c.DueDate)
+            .ToListAsync();
+
+        if (emAberto.Count == 0) return 0;
+
+        var hoje = NormalizarData(DateTime.UtcNow);
+        foreach (var cobranca in emAberto)
+        {
+            cobranca.PaidAt = hoje;
+            // Mesma sincronização da baixa avulsa: a comissão do parceiro sai da
+            // cobrança paga, e pular isto aqui criaria baixa sem comissão.
+            if (_referrals is not null)
+                await _referrals.SynchronizeChargeAsync(cobranca, null);
+        }
+
+        await _catalog.SaveChangesAsync();
+        _logger.LogInformation("{Quantidade} cobrança(s) da loja {TenantId} baixadas em lote pelo painel.",
+            emAberto.Count, tenantId);
+
+        await ReavaliarLojaAsync(tenantId);
+        return emAberto.Count;
+    }
+
     /// <summary>Junta com Tenant pra trazer nome/slug e calcula "vencida" no
     /// servidor — a regra de vencimento vive num lugar só.</summary>
     private async Task<List<TenantChargeDto>> MapearAsync(IQueryable<TenantCharge> query)
@@ -917,18 +950,22 @@ public class PlatformBillingService : IPlatformBillingService
         if (deve && tenant.Status == TenantStatus.Active)
         {
             tenant.Status = TenantStatus.Suspended;
+            tenant.SuspendedByBilling = true;
             tenant.PaymentStatus = TenantPaymentStatus.Atrasado;
             return MudancaDaRegua.Suspensa;
         }
 
-        if (!deve && tenant.Status == TenantStatus.Suspended
-                  && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
+        if (!deve && tenant.Status == TenantStatus.Suspended && tenant.SuspendedByBilling)
         {
-            // A dupla condição é o que impede a régua de reabrir uma loja que
+            // SuspendedByBilling é o que impede a régua de reabrir uma loja que
             // o dono da plataforma suspendeu à mão por outro motivo (fim de
-            // contrato, abuso). Só volta quem a própria régua derrubou, e a
-            // marca disso é o PaymentStatus.Atrasado que ela mesma gravou.
+            // contrato, abuso). Só volta quem a própria régua derrubou.
+            //
+            // Essa marca era o PaymentStatus.Atrasado, e isso era um bug: marcar
+            // "Pago" à mão na lista apagava a marca, e a loja não voltava nem
+            // depois de o pagamento entrar.
             tenant.Status = TenantStatus.Active;
+            tenant.SuspendedByBilling = false;
             tenant.PaymentStatus = TenantPaymentStatus.Pago;
             return MudancaDaRegua.Reativada;
         }

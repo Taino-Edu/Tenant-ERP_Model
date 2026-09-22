@@ -109,6 +109,12 @@ public class UpdateTenantBillingRequest
     [Required]
     public string PaymentStatus { get; set; } = string.Empty;
 
+    /// <summary>Confirma a baixa das cobranças em aberto ao marcar a loja como
+    /// "Pago". Sem isto, marcar "Pago" com dívida em aberto é recusado (409):
+    /// gravar só o status era mentira, porque a régua suspendia a loja de novo na
+    /// rodada seguinte, com e-mail de suspensão pro lojista.</summary>
+    public bool DarBaixaNasCobrancas { get; set; }
+
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
 
     /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null e omitido são

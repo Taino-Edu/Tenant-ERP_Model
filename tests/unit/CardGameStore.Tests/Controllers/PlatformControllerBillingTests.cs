@@ -12,6 +12,7 @@
 using CardGameStore.Controllers;
 using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,7 @@ public class PlatformControllerBillingTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    private static PlatformController CreateController(CatalogDbContext catalog)
+    private static PlatformController CreateController(CatalogDbContext catalog, bool comBilling = false)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -51,7 +52,10 @@ public class PlatformControllerBillingTests
             new Mock<IServiceScopeFactory>().Object,
             new MemoryCache(new MemoryCacheOptions()),
             new TenantDatabaseAdmin(config, new TenantDatabaseCredentials(config)),
-            config);
+            config,
+            comBilling
+                ? new PlatformBillingService(catalog, NullLogger<PlatformBillingService>.Instance, config: config)
+                : null);
     }
 
     private static async Task<Guid> SeedTenantAsync(CatalogDbContext db)
@@ -110,5 +114,79 @@ public class PlatformControllerBillingTests
 
         (await db.Tenants.AsNoTracking().SingleAsync(t => t.Id == id)).BillingStartsOn
             .Should().Be(DataAtual, "a tela manda o PATCH ao mexer em plano ou pagamento sem mandar a data");
+    }
+
+    // ── "Pago" com dívida em aberto ──────────────────────────────────────────
+    // O bug: marcar "Pago" na lista gravava só o status da loja. Nenhuma cobrança
+    // era baixada, e a régua suspendia a loja de novo na rodada seguinte — com
+    // e-mail de suspensão pro lojista a cada volta.
+
+    private static async Task<(Guid TenantId, List<Guid> Cobrancas)> SeedLojaDevendoAsync(CatalogDbContext db, int cobrancas = 1)
+    {
+        var id = await SeedTenantAsync(db);
+        var hoje = DateTime.SpecifyKind(DateTime.UtcNow.Date, DateTimeKind.Utc);
+        var ids = new List<Guid>();
+        for (var i = 1; i <= cobrancas; i++)
+        {
+            var cobranca = new TenantCharge
+            {
+                TenantId = id, Kind = TenantChargeKind.Mensalidade, Amount = 269m,
+                ReferenceMonth = hoje.AddMonths(-i), DueDate = hoje.AddDays(-20 * i),
+            };
+            db.TenantCharges.Add(cobranca);
+            ids.Add(cobranca.Id);
+        }
+        await db.SaveChangesAsync();
+        return (id, ids);
+    }
+
+    [Fact]
+    public async Task UpdateBilling_PagoComCobrancaEmAberto_RecusaEDevolveALista()
+    {
+        await using var db = CreateCatalogDb();
+        var (id, _) = await SeedLojaDevendoAsync(db, cobrancas: 2);
+
+        var resultado = await CreateController(db, comBilling: true)
+            .UpdateBilling(id, Pedido(primeiraCobranca: null));
+
+        resultado.Should().BeOfType<ConflictObjectResult>();
+        var corpo = ((ConflictObjectResult)resultado).Value!;
+        corpo.GetType().GetProperty("ErrorCode")!.GetValue(corpo).Should().Be("cobrancas_em_aberto");
+        corpo.GetType().GetProperty("Total")!.GetValue(corpo).Should().Be(538m);
+
+        (await db.TenantCharges.AsNoTracking().ToListAsync())
+            .Should().OnlyContain(c => c.PaidAt == null, "recusar não pode baixar nada pela metade");
+    }
+
+    [Fact]
+    public async Task UpdateBilling_PagoConfirmandoABaixa_QuitaAsCobrancas()
+    {
+        await using var db = CreateCatalogDb();
+        var (id, atrasadas) = await SeedLojaDevendoAsync(db, cobrancas: 2);
+
+        var pedido = Pedido(primeiraCobranca: null);
+        pedido.DarBaixaNasCobrancas = true;
+
+        var resultado = await CreateController(db, comBilling: true).UpdateBilling(id, pedido);
+
+        resultado.Should().BeOfType<OkObjectResult>();
+        // Só as que estavam em aberto. A mensalidade do mês corrente, que o
+        // recálculo das condições cria em seguida, nasce a vencer e não é paga
+        // por tabela — quitar atrasado não adianta o mês que está começando.
+        (await db.TenantCharges.AsNoTracking().Where(c => atrasadas.Contains(c.Id)).ToListAsync())
+            .Should().OnlyContain(c => c.PaidAt != null);
+        (await db.Tenants.AsNoTracking().SingleAsync(t => t.Id == id)).PaymentStatus
+            .Should().Be(TenantPaymentStatus.Pago);
+    }
+
+    [Fact]
+    public async Task UpdateBilling_PagoSemDivida_ContinuaPassandoDireto()
+    {
+        await using var db = CreateCatalogDb();
+        var id = await SeedTenantAsync(db);
+
+        var resultado = await CreateController(db, comBilling: true).UpdateBilling(id, Pedido(primeiraCobranca: null));
+
+        resultado.Should().BeOfType<OkObjectResult>("loja sem cobrança em aberto não precisa de confirmação");
     }
 }

@@ -920,6 +920,10 @@ export interface UpdateTenantBillingRequest {
   /** Omitido/null preserva o limite atual — para remover de vez, use removerMaxUsers. */
   maxUsers?: number | null
   removerMaxUsers?: boolean
+  /** Confirma a baixa das cobranças em aberto ao marcar a loja como "Pago".
+   *  Sem isto o backend recusa com 409 e devolve a lista, porque só marcar o
+   *  status não paga nada e a régua suspende a loja de novo. */
+  darBaixaNasCobrancas?: boolean
 }
 
 export interface TenantActivity {

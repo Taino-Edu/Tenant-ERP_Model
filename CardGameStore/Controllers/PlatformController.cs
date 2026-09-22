@@ -147,6 +147,11 @@ public class PlatformController : ControllerBase
         if (tenant is null) return NotFound();
 
         tenant.Status = status;
+        // Mexer no status à mão tira a loja do alcance da régua: suspensa por
+        // pessoa não é reaberta por pagamento, e reativada por pessoa não volta a
+        // ser tratada como suspensão de cobrança. A régua marca de novo se a
+        // dívida continuar vencida.
+        tenant.SuspendedByBilling = false;
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));
@@ -182,6 +187,35 @@ public class PlatformController : ControllerBase
 
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
         if (tenant is null) return NotFound();
+
+        // "Pago" com dívida em aberto: ou dá baixa de verdade, ou não muda nada.
+        // Gravar só o status enganava quem clicava — a régua encontrava a mesma
+        // cobrança vencida na rodada seguinte, suspendia a loja e avisava o
+        // lojista por e-mail.
+        if (paymentStatus == TenantPaymentStatus.Pago && _billing is not null)
+        {
+            var emAberto = await _billing.ListarEmAbertoDaLojaAsync(tenant.Id);
+            if (emAberto.Count > 0)
+            {
+                if (!request.DarBaixaNasCobrancas)
+                    return Conflict(new
+                    {
+                        Message = emAberto.Count == 1
+                            ? "Esta loja tem 1 cobrança em aberto. Confirme a baixa para marcá-la como paga."
+                            : $"Esta loja tem {emAberto.Count} cobranças em aberto. Confirme a baixa para marcá-la como paga.",
+                        ErrorCode = "cobrancas_em_aberto",
+                        Cobrancas = emAberto,
+                        Total = emAberto.Sum(c => c.Valor),
+                    });
+
+                var baixadas = await _billing.BaixarCobrancasEmAbertoAsync(tenant.Id);
+                _logger.LogInformation("Loja {Slug}: {Quantidade} cobrança(s) baixadas junto com o status Pago.",
+                    tenant.Slug, baixadas);
+                // A baixa reavalia a régua e pode ter reativado a loja; o objeto
+                // em memória precisa enxergar isso antes de ser devolvido.
+                await _catalog.Entry(tenant).ReloadAsync();
+            }
+        }
 
         tenant.PlanName       = request.PlanName;
         tenant.PaymentStatus  = paymentStatus;

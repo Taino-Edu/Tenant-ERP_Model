@@ -55,6 +55,18 @@ public class Tenant
     [Column("status")]
     public TenantStatus Status { get; set; } = TenantStatus.Active;
 
+    /// <summary>True quando quem suspendeu foi a régua de cobrança, e não uma
+    /// pessoa. É o que autoriza a régua a reativar a loja sozinha quando a dívida
+    /// é quitada.
+    ///
+    /// Existe como coluna própria porque antes esse papel era do PaymentStatus
+    /// (só reativava quem estava "Atrasado"): bastava o dono da plataforma marcar
+    /// "Pago" à mão na lista para a marca sumir, e a loja ficava suspensa para
+    /// sempre — inclusive depois do pagamento entrar de verdade. Suspensão manual
+    /// continua fora do alcance da régua, que é o motivo original da trava.</summary>
+    [Column("suspended_by_billing")]
+    public bool SuspendedByBilling { get; set; }
+
     /// <summary>False quando a última tentativa de migrar o schema falhou.</summary>
     [Column("schema_ready")]
     public bool SchemaReady { get; set; } = true;
