@@ -47,8 +47,13 @@ public class PlatformBillingNotifier : IPlatformBillingNotifier
         _logger = logger;
     }
 
+    /// <summary>Mesmo padrão do PlatformBillingService: 15 dias, o piso da
+    /// cláusula 15.1 do contrato. Os dois leem a mesma chave, e divergir aqui
+    /// faria o aviso prometer uma data de suspensão diferente da real.</summary>
     private int DiasDeCarencia =>
-        int.TryParse(_config["Billing:DiasDeCarenciaAposVencimento"], out var dias) && dias >= 0 ? dias : 7;
+        int.TryParse(_config["Billing:DiasDeCarenciaAposVencimento"], out var dias) && dias >= 0
+            ? dias
+            : PlatformBillingService.CarenciaPadraoDoContrato;
 
     public void NotificarLojaSuspensa(Guid tenantId) =>
         Disparar(tenantId, Suspensa, (email, t) => email.SendLojaSuspensaAsync(
