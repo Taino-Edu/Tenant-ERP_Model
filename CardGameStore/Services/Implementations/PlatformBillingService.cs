@@ -44,14 +44,18 @@ public class PlatformBillingService : IPlatformBillingService
     }
 
     /// <summary>Dias de tolerância depois do vencimento antes de suspender.
-    /// Sete por padrão: o Pix cai no mesmo dia, mas boleto compensa em dois dias
-    /// úteis e feriado estica isso — suspender no dia seguinte ao vencimento
-    /// derrubaria loja que já pagou. Configurável porque é regra de negócio, não
-    /// constante técnica.</summary>
+    ///
+    /// Quinze é o piso do CONTRATO (cláusula 15.1: suspensão só com atraso
+    /// "superior a 15 dias"), e não uma folga técnica. O padrão era 7 e
+    /// suspendia loja de cliente no oitavo dia — metade do prazo contratado.
+    /// Continua configurável porque é regra de negócio, mas baixar daqui é
+    /// descumprir o contrato assinado.</summary>
+    internal const int CarenciaPadraoDoContrato = 15;
+
     private int DiasDeCarencia =>
         int.TryParse(_config?["Billing:DiasDeCarenciaAposVencimento"], out var dias) && dias >= 0
             ? dias
-            : 7;
+            : CarenciaPadraoDoContrato;
 
     /// <summary>Reduz qualquer data ao dia 1 do mês, 00:00 UTC. Toda competência
     /// passa por aqui: sem isso, "março" gravado como dia 3 e como dia 17 viram

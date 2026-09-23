@@ -31,14 +31,14 @@ public class PlatformBillingAutomationTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    private static PlatformBillingService CreateService(CatalogDbContext db, int carencia = 7)
+    private static PlatformBillingService CreateService(CatalogDbContext db, int? carencia = 7)
     {
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Billing:DiasDeCarenciaAposVencimento"] = carencia.ToString(),
-            })
-            .Build();
+        var valores = new Dictionary<string, string?>();
+        // carencia null = nada configurado, que é o caso da produção: o padrão
+        // do código é quem manda, e é ele que precisa respeitar o contrato.
+        if (carencia is { } dias) valores["Billing:DiasDeCarenciaAposVencimento"] = dias.ToString();
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(valores).Build();
 
         return new PlatformBillingService(db, NullLogger<PlatformBillingService>.Instance, config: config);
     }
@@ -162,6 +162,42 @@ public class PlatformBillingAutomationTests
         var atualizado = await db.Tenants.FirstAsync();
         atualizado.Status.Should().Be(TenantStatus.Active);
         atualizado.PaymentStatus.Should().Be(TenantPaymentStatus.Pago);
+    }
+
+    // ── Carência do contrato ─────────────────────────────────────────────────
+    // Cláusula 15.1: suspensão só com atraso "superior a 15 dias". O padrão do
+    // código era 7 e a produção não configura a chave, então loja de cliente
+    // caía no oitavo dia — metade do prazo contratado.
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(15)]
+    public async Task Regua_SemConfiguracao_NaoSuspendeAntesDosQuinzeDias(int diasDeAtraso)
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        db.TenantCharges.Add(Cobranca(tenant.Id, diasDesdeVencimento: diasDeAtraso));
+        await db.SaveChangesAsync();
+
+        var resultado = await CreateService(db, carencia: null).AplicarReguaDeCobrancaAsync();
+
+        resultado.Suspensos.Should().BeEmpty($"o contrato só permite suspender com mais de 15 dias, e faltam {15 - diasDeAtraso + 1}");
+        (await db.Tenants.FirstAsync()).Status.Should().Be(TenantStatus.Active);
+    }
+
+    [Fact]
+    public async Task Regua_SemConfiguracao_SuspendeNoDezesseisAvoDia()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        db.TenantCharges.Add(Cobranca(tenant.Id, diasDesdeVencimento: 16));
+        await db.SaveChangesAsync();
+
+        var resultado = await CreateService(db, carencia: null).AplicarReguaDeCobrancaAsync();
+
+        resultado.Suspensos.Should().ContainSingle().Which.Should().Be("loja-teste");
     }
 
     [Fact]
