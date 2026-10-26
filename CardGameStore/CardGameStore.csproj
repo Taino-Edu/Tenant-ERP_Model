@@ -35,16 +35,16 @@
   <ItemGroup>
     <!-- Entity Framework Core -->
     <PackageReference Include="ClosedXML" Version="0.105.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
 
     <!-- Authentication / JWT -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
 
     <!-- Swagger -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
@@ -53,7 +53,7 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
 
     <!-- SignalR (built into ASP.NET Core, but included for clarity) -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.14" />
 
     <!-- Health Checks. O Microsoft.Extensions.Diagnostics.HealthChecks vem no
          próprio ASP.NET Core desde o 10; referenciá-lo aqui gerava NU1510 e
@@ -61,14 +61,14 @@
     <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
 
     <!-- QR Code generation -->
-    <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
 
     <!-- Parsing de User-Agent para o audit log (SO/navegador/mobile) -->
     <PackageReference Include="UAParser" Version="3.1.47" />
 
     <!-- Web Push / VAPID — notificações browser push -->
     <PackageReference Include="WebPush" Version="1.0.13" />
-    <PackageReference Include="Zeus.Net.NFe.NFCe" Version="2026.8.18.2047" />
+    <PackageReference Include="Zeus.Net.NFe.NFCe" Version="2026.9.24.1416" />
 
     <!-- BouncyCastle: leitura de PKCS#12 com algoritmos legados (RC2/3DES), comuns
          em certificados A1 ICP-Brasil mais antigos. O X509Certificate2 nativo do
